@@ -9,7 +9,7 @@ from app.config import settings
 from app.database import engine, AsyncSessionLocal
 from app.middleware import StudioTenantMiddleware
 from app.models.base import Base
-from app.models import auth, parties, accounting, journal, tax  # noqa: F401
+from app.models import auth, parties, accounting, journal, tax, balance  # noqa: F401
 from app.routers import (
     auth as auth_router,
     parties as parties_router,
@@ -20,6 +20,8 @@ from app.routers import (
     vat_settlement as vat_settlement_router,
     withholding as withholding_router,
     fattura_pa as fattura_pa_router,
+    fixed_assets as fixed_assets_router,
+    balance_sheet as balance_sheet_router,
 )
 
 logger = logging.getLogger(__name__)
@@ -107,7 +109,11 @@ app.add_middleware(
 app.add_middleware(StudioTenantMiddleware)
 
 # Routers
+# NOTA: balance_sheet_router deve essere prima di parties_router perché
+#       override il percorso POST .../close per creare il YearClosing.
 app.include_router(auth_router.router)
+app.include_router(balance_sheet_router.router)
+app.include_router(fixed_assets_router.router)
 app.include_router(parties_router.router)
 app.include_router(accounting_router.router)
 app.include_router(journal_router.router)

@@ -12,6 +12,7 @@ from app.models.journal import (
     ScheduledPayment,
 )
 from app.models.tax import VatSettlement, WithholdingTax, FatturaPAImport
+from app.models.balance import FixedAsset, DepreciationEntry, YearClosing
 
 __all__ = [
     "Base",
@@ -33,4 +34,7 @@ __all__ = [
     "VatSettlement",
     "WithholdingTax",
     "FatturaPAImport",
+    "FixedAsset",
+    "DepreciationEntry",
+    "YearClosing",
 ]
