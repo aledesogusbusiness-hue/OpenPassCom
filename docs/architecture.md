@@ -1,7 +1,7 @@
 # Registro Contabilità — Architettura di Sistema
 
 > Documento di architettura v1.0 — 2026-07-02
-> Sistema ERP contabile multi-tenant per studio di commercialisti italiano.
+> Sistema ERP contabile per studio di commercialisti italiano (mono-studio, importi EUR).
 
 ---
 
@@ -13,7 +13,7 @@
 |---|---|---|---|
 | Tipizzazione dominio | Pydantic v2: validazione dichiarativa, `Decimal` nativo | class-validator + DTO; `Decimal` richiede lib esterne (decimal.js) e attenzione alla serializzazione | **FastAPI**: gli importi contabili DEVONO essere `Decimal`, mai float. Python ha `decimal.Decimal` nello standard library con contesto di arrotondamento controllabile (ROUND_HALF_UP, richiesto per IVA) |
 | Ecosistema fiscale/contabile | Librerie mature: `python-dateutil` (competenza/scadenze), `codicefiscale`, generazione XML FatturaPA (`lxml`), parsing tracciati | Ecosistema JS più orientato al web | **FastAPI** |
-| ORM + migrazioni | SQLAlchemy 2.0 + Alembic: supporto first-class a RLS, partitioning, CHECK constraints, `session_variables` per tenant context | TypeORM/Prisma: Prisma non supporta bene RLS e partitioning dichiarativo | **FastAPI**: il multi-tenancy via RLS (vedi §5.1) è il vincolo decisivo |
+| ORM + migrazioni | SQLAlchemy 2.0 + Alembic: supporto first-class a RLS, partitioning, CHECK constraints, `session_variables` per studio context | TypeORM/Prisma: Prisma non supporta bene RLS e constraint dichiarativi | **FastAPI**: gestione RLS e `NUMERIC` esatti senza conversioni è il fattore decisivo |
 | Async / performance | ASGI (uvicorn), async nativo; per un gestionale di studio (decine di utenti concorrenti) più che sufficiente | Performance simili su Fastify adapter | Pari |
 | DI e modularità | Meno "framework-driven": si usa struttura a package per bounded context + `Depends()` | DI container eccellente, moduli espliciti | **NestJS** vince sul framework, ma la disciplina a package (§4) compensa |
 | OpenAPI | Generata automaticamente da Pydantic, usata per generare il client TS del frontend | Decoratori Swagger manuali | **FastAPI** |
@@ -39,9 +39,9 @@
 | Database | PostgreSQL 16 | RLS, partitioning dichiarativo, `NUMERIC` esatto, advisory locks per numerazioni, `JSONB` per audit diff |
 | Cache / code | Redis 7 + **arq** (job async Python) | Job: ricalcolo saldi, generazione PDF registri, notifiche scadenze. arq è nativo asyncio, coerente con FastAPI |
 | Migrazioni | Alembic | Una revisione per modulo/feature, sempre reversibile |
-| Auth | JWT (access 15 min + refresh rotante 7 gg) firmati RS256, gestione interna (no IdP esterno per uno studio privato) | Claims: `sub`, `tenant_id`, `roles`; refresh token persistiti e revocabili |
+| Auth | JWT (access 15 min + refresh rotante 7 gg) firmati RS256, gestione interna (no IdP esterno per uno studio privato) | Claims: `sub`, `roles`; `studio_id` fisso da `STUDIO_ID` in env (non nei claims JWT); refresh token persistiti e revocabili |
 | PDF / stampe | WeasyPrint (HTML→PDF) per libro giornale, registri IVA, bilanci | Template HTML = stessa toolchain del web |
-| Osservabilità | structlog (JSON) + OpenTelemetry, Sentry opzionale | Ogni log porta `tenant_id`, `request_id`, `user_id` |
+| Osservabilità | structlog (JSON) + OpenTelemetry, Sentry opzionale | Ogni log porta `studio_id`, `request_id`, `user_id` |
 
 ---
 
@@ -62,7 +62,7 @@ flowchart TB
     end
 
     subgraph API["FastAPI — api.registro/v1"]
-        MW[Middleware chain:\nauth JWT → tenant resolver →\nSET LOCAL app.tenant_id → audit ctx]
+        MW[Middleware chain:\nauth JWT → studio context →\nSET LOCAL app.tenant_id → audit ctx]
         ACC[accounting]
         TAX[tax]
         PAR[parties]
@@ -79,7 +79,7 @@ flowchart TB
     end
 
     subgraph Data
-        PG[(PostgreSQL 16\nRLS + partitioning per tenant)]
+        PG[(PostgreSQL 16\nRLS + partitioning per anno)]
         RD[(Redis 7\ncache + code arq)]
         S3[(Object storage\nMinIO/S3 — allegati documents)]
     end
@@ -100,11 +100,11 @@ Flusso di una richiesta di scrittura (es. `POST /api/v1/journal-entries`):
 
 ```
 Browser → Nginx → FastAPI
-  1. AuthMiddleware      : verifica JWT, estrae user_id + tenant_id
-  2. TenantMiddleware    : apre transazione, SET LOCAL app.tenant_id = '<uuid>'
+  1. AuthMiddleware      : verifica JWT, estrae user_id + roles
+  2. StudioMiddleware    : apre transazione, SET LOCAL app.tenant_id = STUDIO_ID (fisso da env)
   3. Router v1           : validazione Pydantic (tipi, formati)
   4. Service layer       : invarianti di dominio (quadratura, esercizio aperto…)
-  5. Repository          : SQL sotto RLS — il DB rifiuta righe fuori tenant
+  5. Repository          : SQL sotto RLS — il DB rifiuta righe fuori studio_id
   6. AuditRecorder       : entro la STESSA transazione scrive audit_log
   7. Commit → evento di dominio su Redis (per worker) → risposta 201
 ```
@@ -162,49 +162,50 @@ accounting/
 
 ### 3.5 `studio` — tenant, utenti, sicurezza, audit
 - **Responsabilità**: Studio (tenant root), utenti, ruoli e permessi (RBAC), gestione aziende clienti come "fascicoli" assegnabili ai collaboratori, audit log centralizzato, sessioni/refresh token, impostazioni studio.
-- **È l'unico contesto** che può leggere trasversalmente (per l'audit) e che gestisce la creazione dei tenant.
+- **È l'unico contesto** che può leggere trasversalmente (per l'audit) e che gestisce utenti e impostazioni dello studio.
 
 ---
 
 ## 4. Pattern architetturali
 
-### 4.1 Multi-tenancy: RLS PostgreSQL + middleware (difesa in profondità)
+### 4.1 Isolamento dati: RLS PostgreSQL + middleware (difesa in profondità)
 
-**Decisione: Row-Level Security come enforcement primario, middleware applicativo come secondo livello.** Confronto:
+**Sistema mono-studio**: `studio_id` è un UUID fisso definito in configurazione (`STUDIO_ID` env var / `settings.py`). Non esiste UI né API per creare o gestire studi; il record `Studio` è seedato una sola volta in migrazione. Non si partiziona per schema PG né si usano schemi separati per studio.
 
-| | Solo middleware/query filter | Solo RLS | RLS + middleware (scelto) |
-|---|---|---|---|
-| Un `WHERE tenant_id` dimenticato | Data leak | Nessun leak (DB filtra) | Nessun leak |
-| Query analitiche/report scritte a mano | Rischio alto | Sicure | Sicure |
-| Testabilità del confine | Difficile | Testabile con SQL puro | Testabile |
-| Costo | Zero | ~trascurabile con indice su tenant_id | ~trascurabile |
+**RLS come cintura di sicurezza**: Row-Level Security è attiva su tutte le tabelle tenant-scoped, non per isolare studi multipli ma come secondo livello di difesa contro bug applicativi che potrebbero esporre dati di una `ClientEntity` a utenti non autorizzati.
+
+| | Solo middleware/query filter | RLS + middleware (scelto) |
+|---|---|---|
+| Un `WHERE tenant_id` dimenticato | Potenziale leak | Bloccato a livello DB |
+| Query analitiche/report scritti a mano | Rischio | Sicure |
+| Testabilità del confine | Difficile | Testabile con SQL puro |
 
 Implementazione:
 
 ```sql
--- Su OGNI tabella tenant-scoped
+-- Su OGNI tabella tenant-scoped (tenant_id = STUDIO_ID fisso)
 ALTER TABLE journal_entry ENABLE ROW LEVEL SECURITY;
-ALTER TABLE journal_entry FORCE ROW LEVEL SECURITY;  -- vale anche per il table owner
+ALTER TABLE journal_entry FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY tenant_isolation ON journal_entry
+CREATE POLICY studio_isolation ON journal_entry
     USING (tenant_id = current_setting('app.tenant_id')::uuid)
     WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid);
 ```
 
 ```python
-# TenantMiddleware / dependency FastAPI — per ogni richiesta autenticata
+# StudioMiddleware / dependency FastAPI — per ogni richiesta autenticata
 async with session.begin():
     await session.execute(
-        text("SET LOCAL app.tenant_id = :tid"), {"tid": str(claims.tenant_id)}
+        text("SET LOCAL app.tenant_id = :tid"), {"tid": settings.STUDIO_ID}
     )  # SET LOCAL: scade a fine transazione, sicuro con connection pooling
 ```
 
 Regole:
 - L'utenza applicativa PG (`app_user`) **non** è owner delle tabelle e **non** ha `BYPASSRLS`.
 - Le migrazioni girano con utenza separata (`app_migrator`).
-- Il worker arq riceve `tenant_id` nel payload del job e imposta lo stesso `SET LOCAL`.
-- Secondo livello: mixin `TenantScopedRepository` che aggiunge comunque il filtro `tenant_id` (fail-fast in test se i due livelli divergono).
-- Scoping intra-tenant: quasi tutte le tabelle contabili portano anche `client_entity_id`; l'accesso per collaboratore alla singola azienda cliente è verificato nel service layer (`ClientAccessPolicy`), non in RLS (granularità autorizzativa, non di isolamento).
+- Il worker arq legge `STUDIO_ID` dalla configurazione e imposta lo stesso `SET LOCAL`.
+- Secondo livello: mixin `StudioScopedRepository` che aggiunge il filtro `tenant_id` (fail-fast in test se i due livelli divergono).
+- Scoping intra-studio: quasi tutte le tabelle contabili portano `client_entity_id`; l'accesso del collaboratore alla singola azienda cliente è verificato nel service layer (`ClientAccessPolicy`), non in RLS (granularità autorizzativa, non di isolamento).
 
 ### 4.2 Audit log
 
@@ -272,7 +273,7 @@ updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()   -- trigger di touch
 
 ### 5.2 Strategia di partitioning
 
-Contesto: uno studio (pochi tenant, decine di aziende cliente, volumi da studio commercialista: 10³–10⁵ scritture/anno per azienda). Il partitioning serve a manutenzione/archiviazione per esercizio più che a performance pura.
+Contesto: mono-studio con qualche decina di aziende cliente, volumi da studio commercialista: 10³–10⁵ scritture/anno per azienda. Schema semplice con indici standard; il partitioning serve a manutenzione/archiviazione per esercizio più che a performance pura.
 
 | Tabella | Strategia | Chiave | Motivo |
 |---|---|---|---|
@@ -280,8 +281,6 @@ Contesto: uno studio (pochi tenant, decine di aziende cliente, volumi da studio 
 | `vat_entry`, `vat_entry_line` | `RANGE` annuale su data registrazione | anno | idem + i registri IVA si stampano per anno |
 | `audit_log` | `RANGE` mensile su `occurred_at` | mese | volume alto, retention 10 anni con detach a freddo |
 | Tutte le altre | Nessun partitioning | — | volumi bassi; RLS + indice composito `(tenant_id, client_entity_id, ...)` bastano |
-
-**Non** si partiziona per tenant (`LIST` su tenant_id): con pochi tenant e RLS attiva sarebbe complessità senza beneficio; la scelta è documentata come riapribile se il sistema diventasse multi-studio SaaS (>50 tenant).
 
 Indici tipo (esempio `journal_entry`):
 
@@ -340,6 +339,10 @@ services:
 - **Backup**: PITR PostgreSQL (WAL archiving) + dump giornaliero cifrato; retention allineata all'obbligo decennale; restore testato in CI mensile.
 - **CI/CD** (GitHub Actions): lint (ruff, mypy, eslint) → test (pytest con Postgres di servizio, vitest/playwright) → build immagini → scan (trivy) → deploy staging → smoke test → prod manuale.
 
+### 6.3 Conservazione sostitutiva (integration point futuro)
+
+La conservazione digitale a norma (CAD, DM 17/6/2014) è delegata a un conservatore accreditato esterno (es. Infocert, Namirial). Il sistema non implementa internamente un modulo di conservazione; è previsto un futuro integration point tramite webhook/API verso il conservatore, attivabile come sotto-task della Fase 6 su richiesta. <!-- TODO: estendibile → endpoint webhook verso conservatore accreditato, firma digitale pacchetti AIP/SIP -->
+
 ---
 
 ## 7. Decisioni registrate (ADR sintetici)
@@ -350,20 +353,17 @@ services:
 | ADR-2 | RLS + middleware | Solo query filter | Isolamento tenant garantito dal DB, non dalla disciplina |
 | ADR-3 | Numeri da counter FOR UPDATE al posting | SEQUENCE PG | Le sequence non rollbackano ⇒ buchi |
 | ADR-4 | Audit sincrono in transazione per azioni contabili | Solo async | Audit di un posting non può perdersi |
-| ADR-5 | Partitioning per anno, non per tenant | LIST per tenant | Pochi tenant; il ciclo di vita naturale del dato è l'esercizio |
+| ADR-5 | Partitioning per anno su tabelle ad alto volume | Nessun partitioning | Mono-studio; il ciclo di vita naturale del dato è l'esercizio; decine di clienti non richiedono partitioning aggressivo |
 | ADR-6 | Decimal end-to-end (NUMERIC ↔ Decimal ↔ string in JSON) | float/number | Gli arrotondamenti IVA sono normati; i float sono vietati |
 
 ---
 
-## Revisioni necessarie
+## Decisioni prese
 
-Domande aperte per il titolare del progetto:
-
-1. **Numero di studi**: il sistema resterà mono-studio (un solo tenant reale) o è prevista l'apertura ad altri studi (SaaS)? Cambia priorità di partitioning per tenant e di billing.
-2. **Regimi contabili**: le aziende clienti sono tutte in contabilità ordinaria o servono anche semplificata e regime forfettario? La semplificata cambia registri obbligatori e la Fase 2.
-3. **FatturaPA / SDI**: serve l'import automatico delle fatture elettroniche XML dallo SDI (via intermediario tipo Aruba/AdE massivo) già in roadmap, o il caricamento resta manuale fino alla Fase 6?
-4. **Conservazione sostitutiva**: la conservazione digitale a norma dei registri (CAD, DM 17/6/2014) va gestita internamente o è delegata a un conservatore accreditato esterno?
-5. **Volumetrie attese**: quante aziende clienti e quante registrazioni/anno per azienda? Serve per dimensionare partitioning, pool DB e piani di backup.
-6. **Portale cliente (Fase 5)**: i clienti dello studio accederanno con utenze proprie? Impatta il modello RBAC (ruolo `client_viewer`) e l'esposizione pubblica dell'API.
-7. **Hosting**: preferenza per cloud italiano/UE (GDPR, dati contabili)? Provider già in uso dallo studio?
-8. **Multi-valuta**: si assume EUR-only; confermare che nessun cliente tiene contabilità in valuta estera.
+1. **Mono-studio**: sistema a studio singolo. `studio_id` = UUID fisso in configurazione (`STUDIO_ID` env var); nessuna UI/API di gestione studio; il record `Studio` è seedato in migrazione. Nessun partitioning per studio né schemi PG separati.
+2. **Regimi fiscali**: supportati `ordinario`, `semplificato`, `forfettario`. Campo `fiscal_regime` su `client_entity`. Per i forfettari l'IVA non è applicabile (art. 1 c. 54-89 L. 190/2014) — vedi §4.1 e domain-model per invariante.
+3. **Import FatturaPA**: sì, pianificato in Fase 3 (base: parsing XML SDI + bozza registrazione); pipeline automatizzata completa in Fase 6.
+4. **Conservazione sostitutiva**: delegata a conservatore accreditato esterno; integration point futuro (webhook/API verso es. Infocert, Namirial) — vedi §6.3. Non in roadmap attiva.
+5. **Volumetrie**: qualche decina di aziende clienti. Nessun partitioning aggressivo: schema semplice, indici standard (vedi §5.2).
+6. **Valuta**: EUR-only. Nessun campo `currency` né `exchange_rate` in nessuna tabella; tutti gli importi sono `NUMERIC(15,2)` in euro.
+7. **Complessità**: versione semplice con note di estendibilità (`<!-- TODO: estendibile → ... -->`); si privilegia la semplicità corrente dove i documenti davano opzioni complesse.

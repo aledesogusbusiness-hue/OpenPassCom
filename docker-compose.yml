@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-registro_contabilita}
+      POSTGRES_USER: ${POSTGRES_USER:-rcuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rcpassword}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rcuser} -d ${POSTGRES_DB:-registro_contabilita}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-rcuser}:${POSTGRES_PASSWORD:-rcpassword}@db:5432/${POSTGRES_DB:-registro_contabilita}
+      JWT_SECRET: ${JWT_SECRET:-changeme_in_production_use_long_random_string}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 480
+      STUDIO_ID: ${STUDIO_ID:-00000000-0000-0000-0000-000000000001}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@studio-rossi.it}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin2024!Secure}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redisdata:/data
+
+volumes:
+  pgdata:
+  # redisdata:

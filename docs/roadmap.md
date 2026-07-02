@@ -12,15 +12,15 @@
 
 ---
 
-## Fase 1 — Fondazioni (setup, auth, multi-tenant, anagrafiche, piano dei conti, audit)
+## Fase 1 — Fondazioni (setup, auth, anagrafiche, piano dei conti, audit)
 
-**Obiettivo**: piattaforma sicura e multi-tenant su cui ogni fase successiva monta solo logica di dominio. Alla fine, la commercialista può creare aziende clienti, gestire collaboratori e consultare il piano dei conti.
+**Obiettivo**: piattaforma sicura (mono-studio, `STUDIO_ID` fisso in env) su cui ogni fase successiva monta solo logica di dominio. Alla fine, la commercialista può creare aziende clienti, gestire collaboratori e consultare il piano dei conti.
 
 **Deliverable verificabili**
 1. Monorepo `backend/` + `frontend/` + `infra/`; `docker compose up` porta su DB, Redis, MinIO, API, worker, web, mailpit; `make dev` esegue migrazioni + seed.
 2. CI GitHub Actions (lint, typecheck, test, build immagini) su ogni PR.
 3. Auth JWT: login, refresh rotante, logout con revoca, hash argon2id, rate-limit sul login.
-4. Multi-tenancy: RLS attiva su ogni tabella tenant-scoped, middleware `SET LOCAL app.tenant_id`, ruoli PG `app_user`/`app_migrator` separati.
+4. Isolamento dati: RLS attiva su ogni tabella tenant-scoped (`STUDIO_ID` fisso da env, nessuna UI di gestione studio — record seedato in migrazione), middleware `SET LOCAL app.tenant_id`, ruoli PG `app_user`/`app_migrator` separati.
 5. RBAC: ruoli seed (`owner`, `accountant`, `collaborator`, `viewer`), permessi `<ctx>.<azione>`, guard FastAPI `require_permission()`.
 6. CRUD `ClientEntity` con validazione P.IVA (check-digit) e CF; assegnazione collaboratori (`user_client_access`).
 7. CRUD `Party` (clienti/fornitori) con creazione automatica del partitario L4.
@@ -47,7 +47,7 @@ frontend/src/lib/api/ (client generato)
 - Integrazione: ogni scrittura produce riga audit con before/after corretti.
 - E2E (Playwright): login → crea azienda → clona piano conti → crea fornitore → verifica partitario.
 
-**Done quando**: regola trasversale + i test di isolamento tenant passano + demo: creare seconda azienda cliente e un collaboratore che vede solo quella.
+**Done quando**: regola trasversale + i test di isolamento passano (RLS per studio_id; accesso collaboratore limitato alle proprie ClientEntity) + demo: creare seconda azienda cliente e un collaboratore che vede solo quella.
 
 ---
 
@@ -101,7 +101,8 @@ frontend/src/app/(app)/{journal, ledger, trial-balance, vat-registers, schedules
 3. Ritenute d'acconto passive: generate dalla causale FAP, scadenza al 16 del mese successivo, stato accrued → paid; riepilogo per certificazione (base CU).
 4. F24: modello draft da liquidazione IVA (6001–6012, 6031–6034) e ritenute (1040), compensazione con crediti disponibili, marcatura pagato ⇒ scrittura PAGF24 proposta.
 5. Calendario adempimenti per azienda: scadenze generate automaticamente (liquidazioni 16/mese, F24, acconto IVA 27/12) + scadenze manuali; vista studio cross-azienda ("cosa scade questa settimana su tutti i clienti"); notifiche email via worker.
-6. Frontend: wizard liquidazione con anteprima e conferma, pagina F24, calendario adempimenti studio e per azienda.
+6. Import FatturaPA XML (base): parsing tracciato SDI (fattura singola e lotto), creazione `Document` + bozza di registrazione precompilata (anagrafica matchata su P.IVA, righe IVA per aliquota dal XML, conto proposto); gestione note credito. La pipeline automatizzata con OCR e riconciliazione bancaria è demandata alla Fase 6.
+7. Frontend: wizard liquidazione con anteprima e conferma, pagina F24, calendario adempimenti studio e per azienda, inbox documenti FatturaPA importati.
 
 **Moduli/file principali**
 ```
@@ -195,11 +196,13 @@ frontend/src/app/(portal)/…                        # layout e auth separati
 **Obiettivo**: ridurre il data-entry, che è il costo principale dello studio. Tutto ciò che è automatico produce **bozze**, mai posting diretti: l'ultima parola resta all'operatore.
 
 **Deliverable verificabili**
-1. Import FatturaPA XML: parsing del tracciato SDI (fattura singola e lotto), creazione `Document` + bozza di registrazione precompilata (anagrafica matchata su P.IVA, righe IVA per aliquota dal XML, conto proposto); gestione note credito e bollo.
+1. Import FatturaPA massivo/automatico: estensione dell'import base (Fase 3) con integrazione PEC/SDI, import lotti automatizzati, gestione bollo virtuale e split payment; pipeline di elaborazione in background via worker. <!-- TODO: estendibile → integrazione diretta intermediario SDI (Aruba, AdE) per ricezione automatica -->
 2. OCR fatture cartacee/PDF: implementazione dell'interfaccia `DocumentExtractor` (Fase 1) con motore locale (tesseract/paddle) o servizio esterno configurabile; estrazione campi chiave con confidence score; sotto soglia ⇒ campo evidenziato da verificare.
 3. Riconciliazione bancaria: import estratto conto (CSV/CAMT.053), motore di matching movimenti ↔ rate scadenzario e ↔ scritture (regole: importo+data±tolleranza, riferimento fattura, anagrafica); conferma manuale genera INC/PAG in bozza; movimenti non matchati ⇒ suggerimento causale.
 4. Suggerimenti automatici: proposta conto di costo/ricavo per fornitore/cliente basata sullo storico delle registrazioni (frequenza per party, fallback su default_account_id); apprendimento incrementale semplice e spiegabile (niente black-box: si mostra il perché).
 5. Metriche di automazione: % bozze accettate senza modifiche, tempo medio di registrazione — per dimostrare il ROI alla titolare.
+
+**Nota — Conservatore accreditato esterno**: la conservazione digitale a norma (CAD, DM 17/6/2014) non è implementata internamente. È previsto un integration point verso conservatore accreditato esterno (es. Infocert, Namirial) attivabile come sotto-task opzionale di questa fase su richiesta esplicita. <!-- TODO: estendibile → webhook/API conservatore, firma digitale pacchetti AIP/SIP -->
 
 **Moduli/file principali**
 ```
@@ -238,15 +241,20 @@ F1 ──▶ F2 ──▶ F3 ──▶ F4 ──▶ F5 ──▶ F6
 
 ---
 
-## Revisioni necessarie
+## Decisioni prese
 
-Domande aperte per il titolare del progetto:
+1. **Mono-studio**: un solo studio, fisso. `studio_id` = UUID fisso da `STUDIO_ID` in env; nessuna UI/API di gestione studio; record seedato in migrazione. La Fase 1 non include setup gestione studi multipli.
+2. **Regimi fiscali**: supportati `ordinario`, `semplificato`, `forfettario`. Per i forfettari l'IVA non è applicabile (art. 1 c. 54-89 L. 190/2014); causali IVA (FV/FA/LIQ) non disponibili per tali aziende.
+3. **Import FatturaPA**: sì, pianificato in Fase 3 come deliverable base (parsing XML SDI, bozza registrazione); automazione completa in Fase 6.
+4. **Conservazione sostitutiva**: nessuna implementazione interna. Integration point futuro verso conservatore accreditato esterno (Infocert, Namirial), attivabile come sotto-task opzionale in Fase 6.
+5. **Volumetrie**: qualche decina di aziende clienti. Nessun partitioning aggressivo né logica multi-studio nella roadmap. Schema semplice con indici standard.
+6. **Valuta**: EUR-only. Nessun campo `currency` né `exchange_rate` in nessuna fase.
+7. **Complessità**: dove le fasi davano opzioni complesse o "in futuro si potrebbe", si privilegia la versione semplice con note `<!-- TODO: estendibile → ... -->` per funzionalità future.
 
-1. **Ordine di valore**: la priorità dello studio è ridurre il data-entry (anticipare import FatturaPA della Fase 6 subito dopo la Fase 2?) o arrivare presto agli adempimenti (Fase 3)? L'import XML è candidabile ad anticipo perché indipendente dalla riconciliazione.
-2. **Azienda pilota**: quale cliente usare per lo shadow run di Fase 2/3? Serve un'azienda in ordinaria, con volumi medi e IVA trimestrale o mensile?
-3. **Migrazione dati**: quando si migra dal gestionale attuale — solo saldi di apertura + anagrafiche (consigliato), o anche lo storico scritture? Con quale formato di export disponibile?
-4. **Tempi e capacità**: quante persone/giorni a settimana sul progetto? Le fasi non hanno date volutamente: vanno calate sulla capacità reale.
-5. **F24 telematico**: in Fase 3 l'F24 è un prospetto; serve l'export nel tracciato per Entratel/home banking (CBI) o basta il PDF da ricopiare?
-6. **Portale cliente**: è davvero richiesto dai clienti dello studio o la Fase 5 può ridursi a dashboard+task interni? (taglio di scope significativo).
-7. **OCR**: preferenza per motore locale (nessun dato fuori dallo studio, qualità inferiore) o servizio cloud (qualità superiore, valutazione GDPR/DPA necessaria)?
-8. **Criteri di accettazione fiscali**: chi valida i golden test fiscali (liquidazioni, ammortamenti)? Proposta: la titolare firma i casi di test attesi prima dell'implementazione di F3/F4.
+**Domande ancora aperte** (operative, non architetturali):
+
+- **Azienda pilota**: quale cliente usare per lo shadow run di Fase 2/3?
+- **Migrazione dati**: solo saldi di apertura + anagrafiche (consigliato), o anche storico scritture?
+- **Tempi e capacità**: quante persone/giorni a settimana? Le fasi non hanno date: vanno calate sulla capacità reale.
+- **F24 telematico**: basta il PDF da ricopiare o serve tracciato Entratel/CBI in Fase 3?
+- **OCR**: motore locale (privacy) o servizio cloud (qualità superiore + valutazione GDPR/DPA)?

@@ -1,7 +1,7 @@
 # Registro Contabilità — Modello di Dominio
 
 > Documento di dominio v1.0 — 2026-07-02
-> Convenzioni: PK sempre `id UUID DEFAULT gen_random_uuid()`. Colonne di audit standard su ogni tabella tenant-scoped: `tenant_id UUID NOT NULL`, `created_by UUID NOT NULL`, `updated_by UUID NOT NULL`, `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()` — indicate come **[std]** e non ripetute. Gli importi sono `NUMERIC(15,2)`, le aliquote `NUMERIC(5,2)`. Le date contabili sono `DATE` (la competenza è un giorno, non un istante); i timestamp tecnici `TIMESTAMPTZ`.
+> Convenzioni: PK sempre `id UUID DEFAULT gen_random_uuid()`. Colonne di audit standard su ogni tabella tenant-scoped: `tenant_id UUID NOT NULL`, `created_by UUID NOT NULL`, `updated_by UUID NOT NULL`, `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()` — indicate come **[std]** e non ripetute. Gli importi sono `NUMERIC(15,2)` in EUR (sistema EUR-only: nessun campo `currency` né `exchange_rate`), le aliquote `NUMERIC(5,2)`. Le date contabili sono `DATE` (la competenza è un giorno, non un istante); i timestamp tecnici `TIMESTAMPTZ`.
 
 ---
 
@@ -22,7 +22,7 @@
 | is_active | BOOLEAN | NOT NULL DEFAULT true |
 | created_at / updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() |
 
-Unica tabella senza `tenant_id` (è il tenant). Nessuna policy RLS di isolamento inter-riga: l'accesso è filtrato dal claim JWT.
+Record singolo, seedato in migrazione. `studio_id` = UUID fisso in configurazione (`STUDIO_ID` env var) — nessuna UI né API di gestione studio. Unica tabella senza `tenant_id` (è il tenant). Nessuna policy RLS di isolamento inter-riga: l'accesso è filtrato dal claim JWT.
 
 ### 1.2 `User` (`app_user`)
 
@@ -113,7 +113,7 @@ Incremento solo con `SELECT ... FOR UPDATE` dentro la transazione di posting.
 | sdi_code | CHAR(7) | NULL — codice destinatario SDI |
 | pec | VARCHAR(254) | NULL |
 | address, city, province, postal_code, country_code | …, CHAR(2), CHAR(5), CHAR(2) DEFAULT 'IT' | |
-| accounting_regime | VARCHAR(20) | NOT NULL — 'ordinaria' \| 'semplificata' \| 'forfettario' |
+| fiscal_regime | VARCHAR(20) | NOT NULL DEFAULT 'ordinario' CHECK IN ('ordinario', 'semplificato', 'forfettario') — regime fiscale; per i forfettari l'IVA non è applicabile (art. 1 c. 54-89 L. 190/2014) |
 | vat_period | VARCHAR(10) | NOT NULL — 'monthly' \| 'quarterly' — periodicità liquidazione |
 | vat_quarterly_interest | BOOLEAN | NOT NULL DEFAULT true — interessi 1% (trimestrale per opzione) |
 | account_plan_id | UUID | NOT NULL FK → account_plan(id) |
@@ -459,6 +459,7 @@ Verificate nel service layer (fail = 422 con codice errore) e, dove indicato ⚙
 
 **IVA**
 10. Posting di causale con `vat_register_kind` ⇒ creazione `VatEntry` nella stessa transazione; il protocollo è progressivo senza buchi per (registro, anno).
+10bis. **Regime forfettario**: il service rifiuta il posting di causali con `vat_register_kind IS NOT NULL` se `ClientEntity.fiscal_regime = 'forfettario'` (IVA non applicabile, art. 1 c. 54-89 L. 190/2014). Le causali FV, NCV, FA, NCA, FAP e LIQ non sono disponibili per aziende in regime forfettario.
 11. ⚙ Per ogni `VatEntryLine`: `|vat_amount − round(taxable_amount × rate/100, 2)| ≤ 0.01` (tolleranza da arrotondamento documento); nature N* ⇒ `vat_amount = 0`.
 12. La somma di imponibili+imposta delle righe = `total_amount` del documento (± ritenuta/bollo gestiti come righe fuori campo).
 13. Una `VatEntry` entra in una e una sola `VatSettlement`; una settlement `confirmed` è immutabile e congela le sue VatEntry; lo storno di una fattura già liquidata non modifica la liquidazione passata ma genera rettifica nel periodo corrente.
@@ -501,6 +502,8 @@ Legenda conti: vedi piano dei conti §10. `[P]` = partitario del soggetto.
 | **LIB** | Movimento libero | free | righe libere inserite dall'utente (≥2, quadrate) | — | opzionale |
 | **GIR** | Giroconto | free | come LIB, senza anagrafica | — | — |
 | **SAL** | Stipendi/salari | free (template) | D costo personale (3.3.01) · A dipendenti c/retrib. (2.4.06) · A Erario/INPS (2.4.05/2.4.04) | — | scadenze F24/16 |
+
+**Regime forfettario**: le aziende con `fiscal_regime = 'forfettario'` non applicano IVA (art. 1 c. 54-89 L. 190/2014). Le causali FV, NCV, FA, NCA, FAP (che generano protocollo IVA) e LIQ non sono disponibili per tali aziende; si usano causali libere (LIB/GIR) e ricevute senza IVA.
 
 Comportamento comune: la causale precompila i conti dai ruoli (`party_subaccount` → partitario del soggetto scelto; `vat` → 1.4.02/2.4.02 secondo il registro; `cash_bank` → scelta tra 1.1.01/1.1.02); l'utente può sostituire i conti proposti purché le invarianti reggano.
 
@@ -649,16 +652,20 @@ Note: i conti segnati (−) sono rettificativi (normal_side opposto alla sezione
 
 ---
 
-## Revisioni necessarie
+## Decisioni prese
 
-Domande aperte per il titolare del progetto:
+1. **Mono-studio**: `Studio` è un record singolo seedato in migrazione; `studio_id` = UUID fisso in configurazione. Nessuna UI di gestione studio.
+2. **Regime fiscale**: campo `fiscal_regime` su `ClientEntity` con valori `ordinario`, `semplificato`, `forfettario` (DEFAULT `ordinario`). I forfettari non applicano IVA (invariante 10bis). <!-- TODO: estendibile → regime minimi, nuovi contribuenti -->
+3. **Import FatturaPA**: pianificato in Fase 3 (base) ed esteso in Fase 6; `sdi_id` già presente su `Document`.
+4. **Conservazione sostitutiva**: delegata a conservatore esterno; nessuna entità interna. Integration point futuro come webhook.
+5. **Volumetrie**: qualche decina di aziende clienti. Schema semplice, indici standard, nessun partitioning aggressivo.
+6. **Valuta**: EUR-only. Nessun campo `currency` né `exchange_rate` su nessuna entità; tutti gli importi sono `NUMERIC(15,2)` in euro.
 
-1. **Profondità del piano dei conti**: 4 livelli bastano per tutte le aziende clienti o serve un livello 5 per commesse/centri di costo? In alternativa: dimensione analitica separata (tag centro di costo su `journal_line`)?
-2. **Codifica conti**: confermare il formato `N.N.NN.NNN` o preferite la codifica numerica compatta usata dal gestionale attuale dello studio (per facilitare migrazione dati)?
-3. **Partite aperte**: lo scadenzario a rate qui modellato basta, o serve una vera gestione partite (matching many-to-many incassi↔fatture con abbuoni e differenze cambio)? Impatta `ScheduledPayment.settlement_entry_id` (oggi solo l'ultima scrittura).
-4. **IVA per cassa (art. 32-bis)** e **split payment**: quante aziende clienti li usano? Il flag `is_deferred` è predisposto ma la liquidazione differita richiede logica dedicata (esigibilità all'incasso).
-5. **Corrispettivi**: le aziende retail con registratore telematico rientrano nel perimetro? Il registro `corrispettivi` è previsto ma senza import da RT.
-6. **Ritenute**: aliquota base 20% su imponibile 100% è il caso comune; servono le casistiche agenti (23% sul 50%) e condominio (4%)? Meglio tabella `withholding_kind` di lookup?
-7. **Bilancio CEE**: serve la riclassificazione civilistica (art. 2424/2425 c.c.) già dal domain model (campo `cee_code` su `account`) o si rimanda alla Fase 4?
-8. **Numerazione partitari**: i sottoconti cliente/fornitore devono riprendere i codici del vecchio gestionale in fase di migrazione?
-9. **Cespiti**: confermare che il registro cespiti (Fase 4) introdurrà entità dedicate (`Asset`, `DepreciationPlan`) — qui volutamente escluse.
+**Domande ancora aperte** (tecniche, non influenzate dalle decisioni sopra):
+
+- **Profondità piano dei conti**: 4 livelli bastano o serve livello 5 per commesse/centri di costo? <!-- TODO: estendibile → tag analitico su journal_line -->
+- **Codifica conti**: formato `N.N.NN.NNN` confermato o preferita codifica compatta del gestionale attuale (migrazione dati)?
+- **Partite aperte**: matching many-to-many incassi↔fatture con abbuoni, o basta lo scadenzario a rate attuale?
+- **Ritenute agenti/condominio**: casistiche extra (23% sul 50%, 4%) richiedono tabella `withholding_kind` di lookup?
+- **Bilancio CEE**: campo `cee_code` su `account` già in Fase 4 o rimandato?
+- **Numerazione partitari**: i sottoconti devono riprendere i codici del vecchio gestionale in migrazione?
