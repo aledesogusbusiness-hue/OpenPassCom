@@ -11,6 +11,7 @@ from app.models.journal import (
     PaymentSchedule,
     ScheduledPayment,
 )
+from app.models.tax import VatSettlement, WithholdingTax, FatturaPAImport
 
 __all__ = [
     "Base",
@@ -29,4 +30,7 @@ __all__ = [
     "VatEntry",
     "PaymentSchedule",
     "ScheduledPayment",
+    "VatSettlement",
+    "WithholdingTax",
+    "FatturaPAImport",
 ]

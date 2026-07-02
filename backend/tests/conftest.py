@@ -21,7 +21,7 @@ from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.models.base import Base
-from app.models import auth, parties, accounting  # noqa: F401
+from app.models import auth, parties, accounting, journal, tax  # noqa: F401
 from app.models.auth import User
 from app.models.accounting import AccountType
 from app.services.auth_service import hash_password
