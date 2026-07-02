@@ -2,6 +2,15 @@ from app.models.base import Base, AuditMixin
 from app.models.auth import User, AuditLog
 from app.models.parties import ClientEntity, FiscalYear
 from app.models.accounting import AccountPlan, AccountType, Account
+from app.models.journal import (
+    JournalEntry,
+    JournalLine,
+    SequenceCounter,
+    VatRegister,
+    VatEntry,
+    PaymentSchedule,
+    ScheduledPayment,
+)
 
 __all__ = [
     "Base",
@@ -13,4 +22,11 @@ __all__ = [
     "AccountPlan",
     "AccountType",
     "Account",
+    "JournalEntry",
+    "JournalLine",
+    "SequenceCounter",
+    "VatRegister",
+    "VatEntry",
+    "PaymentSchedule",
+    "ScheduledPayment",
 ]
