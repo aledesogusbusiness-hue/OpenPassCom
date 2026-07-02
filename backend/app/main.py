@@ -9,7 +9,7 @@ from app.config import settings
 from app.database import engine, AsyncSessionLocal
 from app.middleware import StudioTenantMiddleware
 from app.models.base import Base
-from app.models import auth, parties, accounting, journal, tax, balance  # noqa: F401
+from app.models import auth, parties, accounting, journal, tax, balance, studio, bank  # noqa: F401
 from app.routers import (
     auth as auth_router,
     parties as parties_router,
@@ -22,6 +22,9 @@ from app.routers import (
     fattura_pa as fattura_pa_router,
     fixed_assets as fixed_assets_router,
     balance_sheet as balance_sheet_router,
+    studio as studio_router,
+    bank as bank_router,
+    conservatore as conservatore_router,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,6 +125,9 @@ app.include_router(payments_router.router)
 app.include_router(vat_settlement_router.router)
 app.include_router(withholding_router.router)
 app.include_router(fattura_pa_router.router)
+app.include_router(studio_router.router)
+app.include_router(bank_router.router)
+app.include_router(conservatore_router.router)
 
 
 @app.get("/health")

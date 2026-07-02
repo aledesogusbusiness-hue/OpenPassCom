@@ -13,6 +13,8 @@ from app.models.journal import (
 )
 from app.models.tax import VatSettlement, WithholdingTax, FatturaPAImport
 from app.models.balance import FixedAsset, DepreciationEntry, YearClosing
+from app.models.studio import StudioTask
+from app.models.bank import BankStatement, BankTransaction, ConservatoreLog
 
 __all__ = [
     "Base",
@@ -37,4 +39,8 @@ __all__ = [
     "FixedAsset",
     "DepreciationEntry",
     "YearClosing",
+    "StudioTask",
+    "BankStatement",
+    "BankTransaction",
+    "ConservatoreLog",
 ]
