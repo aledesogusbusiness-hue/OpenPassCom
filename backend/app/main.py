@@ -20,6 +20,7 @@ from app.routers import (
     vat_settlement as vat_settlement_router,
     withholding as withholding_router,
     fattura_pa as fattura_pa_router,
+    fattura_pa_export as fattura_pa_export_router,
     fixed_assets as fixed_assets_router,
     balance_sheet as balance_sheet_router,
     studio as studio_router,
@@ -131,6 +132,7 @@ app.include_router(payments_router.router)
 app.include_router(vat_settlement_router.router)
 app.include_router(withholding_router.router)
 app.include_router(fattura_pa_router.router)
+app.include_router(fattura_pa_export_router.router)
 app.include_router(studio_router.router)
 app.include_router(bank_router.router)
 app.include_router(conservatore_router.router)

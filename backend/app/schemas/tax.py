@@ -135,3 +135,87 @@ class FatturaPAElaborateIn(BaseModel):
     account_id_fornitore: uuid.UUID
     account_id_iva: uuid.UUID
     account_id_debito: uuid.UUID
+
+
+# ── FatturaPA Export (Phase 9 — infrastruttura invio SDI) ─────────────────────
+
+class FatturaPAExportLineIn(BaseModel):
+    descrizione: str = Field(min_length=1, max_length=1000)
+    quantita: Decimal = Field(default=Decimal("1"), gt=0)
+    unita_misura: Optional[str] = Field(default=None, max_length=10)
+    prezzo_unitario: Decimal = Field(gt=0)
+    aliquota_iva: int = Field(ge=0, le=22)
+
+
+class FatturaPAExportLineOut(BaseModel):
+    id: uuid.UUID
+    numero_linea: int
+    descrizione: str
+    quantita: Decimal
+    unita_misura: Optional[str]
+    prezzo_unitario: Decimal
+    aliquota_iva: Decimal
+
+    model_config = {"from_attributes": True}
+
+
+class FatturaPAExportCreate(BaseModel):
+    journal_entry_id: Optional[uuid.UUID] = None
+    tipo_documento: str = Field(default="TD01", pattern=r"^TD(0[1-9]|2[0-8])$")
+    numero_fattura: str = Field(min_length=1, max_length=20)
+    data_fattura: date
+
+    cedente_indirizzo: str = Field(min_length=1, max_length=255)
+    cedente_cap: str = Field(min_length=5, max_length=5)
+    cedente_comune: str = Field(min_length=1, max_length=100)
+    cedente_provincia: str = Field(min_length=2, max_length=2)
+
+    destinatario_denominazione: str = Field(min_length=1, max_length=255)
+    destinatario_partita_iva: Optional[str] = Field(default=None, max_length=11)
+    destinatario_codice_fiscale: Optional[str] = Field(default=None, max_length=16)
+    destinatario_indirizzo: str = Field(min_length=1, max_length=255)
+    destinatario_cap: str = Field(min_length=5, max_length=5)
+    destinatario_comune: str = Field(min_length=1, max_length=100)
+    destinatario_provincia: str = Field(min_length=2, max_length=2)
+    destinatario_codice_sdi: str = Field(default="0000000", max_length=7)
+    destinatario_pec: Optional[str] = Field(default=None, max_length=255)
+
+    righe: List[FatturaPAExportLineIn] = Field(min_length=1)
+
+
+class FatturaPAExportOut(BaseModel):
+    id: uuid.UUID
+    studio_id: uuid.UUID
+    client_entity_id: uuid.UUID
+    fiscal_year_id: uuid.UUID
+    journal_entry_id: Optional[uuid.UUID]
+    tipo_documento: str
+    numero_fattura: str
+    data_fattura: date
+    destinatario_denominazione: str
+    destinatario_partita_iva: Optional[str]
+    destinatario_codice_fiscale: Optional[str]
+    destinatario_codice_sdi: str
+    destinatario_pec: Optional[str]
+    stato: str
+    progressivo_invio: Optional[str]
+    identificativo_sdi: Optional[str]
+    data_invio: Optional[datetime]
+    data_esito: Optional[datetime]
+    esito_messaggio: Optional[str]
+    errore_msg: Optional[str]
+    created_at: datetime
+    righe: List[FatturaPAExportLineOut] = []
+
+    model_config = {"from_attributes": True}
+
+
+class FatturaPAExportMarkInviataIn(BaseModel):
+    """Il progressivo_invio è assegnato automaticamente in generate_xml();
+    qui si conferma solo l'avvenuto invio (manuale o da un futuro connettore SDI)."""
+    identificativo_sdi: Optional[str] = Field(default=None, max_length=50)
+
+
+class FatturaPAExportMarkEsitoIn(BaseModel):
+    esito: str = Field(pattern=r"^(accettata|scartata|consegnata)$")
+    messaggio: Optional[str] = Field(default=None, max_length=1000)

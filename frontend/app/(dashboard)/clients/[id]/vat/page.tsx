@@ -36,6 +36,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { FatturaPaExportPanel } from '@/features/vat/components/fattura-pa-export-panel'
 import { useClient, useFiscalYears } from '@/hooks/use-clients'
 import { useJournalEntries } from '@/hooks/use-journal'
 import {
@@ -555,12 +556,23 @@ export default function VatPage() {
 
           {/* Fatture PA */}
           <TabsContent value="fatture-pa" className="mt-4">
-            <DataTable
-              columns={fatturaColumns}
-              data={fatturePa}
-              isLoading={fatturePaLoading}
-              searchPlaceholder="Cerca per filename o stato..."
-            />
+            <Tabs defaultValue="ricevute">
+              <TabsList>
+                <TabsTrigger value="ricevute">Ricevute</TabsTrigger>
+                <TabsTrigger value="emesse">Emesse</TabsTrigger>
+              </TabsList>
+              <TabsContent value="ricevute" className="mt-4">
+                <DataTable
+                  columns={fatturaColumns}
+                  data={fatturePa}
+                  isLoading={fatturePaLoading}
+                  searchPlaceholder="Cerca per filename o stato..."
+                />
+              </TabsContent>
+              <TabsContent value="emesse" className="mt-4">
+                <FatturaPaExportPanel clientId={id} fiscalYearId={fiscalYearId} />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </Tabs>
       )}
