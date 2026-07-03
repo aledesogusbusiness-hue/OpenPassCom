@@ -16,6 +16,8 @@ import {
 } from '@/lib/auth'
 import type { User } from '@/types'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
 interface AuthContextValue {
   user: User | null
   isLoading: boolean
@@ -45,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const response = await fetch('/api/v1/auth/me', {
+        const response = await fetch(`${API_URL}/api/v1/auth/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -71,25 +73,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function login(email: string, password: string): Promise<void> {
-    const body = new URLSearchParams({ username: email, password })
-
-    const loginResponse = await fetch('/api/v1/auth/login', {
+    const loginResponse = await fetch(`${API_URL}/api/v1/auth/login`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: body.toString(),
+      body: JSON.stringify({ email, password }),
     })
 
     if (!loginResponse.ok) {
       const error = await loginResponse.json().catch(() => ({}))
-      throw new Error(error?.detail ?? 'Login failed')
+      throw new Error(typeof error?.detail === 'string' ? error.detail : 'Credenziali non valide')
     }
 
     const { access_token } = await loginResponse.json()
     setToken(access_token)
 
-    const meResponse = await fetch('/api/v1/auth/me', {
+    const meResponse = await fetch(`${API_URL}/api/v1/auth/me`, {
       headers: {
         Authorization: `Bearer ${access_token}`,
       },
