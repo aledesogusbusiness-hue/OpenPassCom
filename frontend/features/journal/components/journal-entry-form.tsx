@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import type { Account } from '@/types'
 
 const CAUSALE_OPTIONS = [
   { value: 'FV', label: 'FV — Fattura Vendita' },
@@ -74,6 +75,7 @@ const journalEntrySchema = z
 export type JournalEntryFormValues = z.infer<typeof journalEntrySchema>
 
 interface JournalEntryFormProps {
+  accounts: Account[]
   onSubmit: (data: JournalEntryFormValues) => Promise<void>
   isLoading?: boolean
 }
@@ -82,7 +84,7 @@ function toFixed2(val: string): number {
   return Math.round(parseFloat(val || '0') * 100) / 100
 }
 
-export function JournalEntryForm({ onSubmit, isLoading }: JournalEntryFormProps) {
+export function JournalEntryForm({ accounts, onSubmit, isLoading }: JournalEntryFormProps) {
   const today = new Date().toISOString().split('T')[0]
 
   const form = useForm<JournalEntryFormValues>({
@@ -219,13 +221,20 @@ export function JournalEntryForm({ onSubmit, isLoading }: JournalEntryFormProps)
                           name={`lines.${index}.account_id`}
                           render={({ field }) => (
                             <FormItem className="space-y-0">
-                              <FormControl>
-                                <Input
-                                  placeholder="Codice conto"
-                                  className="h-8 font-mono text-xs"
-                                  {...field}
-                                />
-                              </FormControl>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue placeholder="Seleziona conto..." />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {accounts.map((acc) => (
+                                    <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                                      {acc.codice} — {acc.nome}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage className="text-xs" />
                             </FormItem>
                           )}

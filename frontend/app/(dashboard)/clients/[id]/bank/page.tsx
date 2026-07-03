@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
-import { ChevronDown, ChevronRight, Upload, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Upload, Loader2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/shared/page-header'
 import { Badge } from '@/components/ui/badge'
@@ -31,6 +31,7 @@ import {
   useBankTransactions,
   useReconcileTransaction,
   useMarkIrrilevante,
+  useImportTransactions,
 } from '@/hooks/use-bank'
 import type { BankStatement, BankTransaction } from '@/types'
 import type { ReconcileInput } from '@/services/bank'
@@ -146,6 +147,7 @@ function TransactionRow({
 
 function StatementCard({ statement, clientId }: { statement: BankStatement; clientId: string }) {
   const [expanded, setExpanded] = useState(false)
+  const [addTxOpen, setAddTxOpen] = useState(false)
   const { data: transactions = [], isLoading } = useBankTransactions(
     clientId,
     expanded ? statement.id : '',
@@ -183,6 +185,12 @@ function StatementCard({ statement, clientId }: { statement: BankStatement; clie
 
       {expanded && (
         <div className="border-t">
+          <div className="flex justify-end p-3 pb-0">
+            <Button size="sm" variant="outline" onClick={() => setAddTxOpen(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Nuova Transazione
+            </Button>
+          </div>
           {isLoading ? (
             <div className="p-4 space-y-2">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -220,7 +228,123 @@ function StatementCard({ statement, clientId }: { statement: BankStatement; clie
           )}
         </div>
       )}
+
+      <AddTransactionDialog
+        open={addTxOpen}
+        onOpenChange={setAddTxOpen}
+        clientId={clientId}
+        statementId={statement.id}
+      />
     </div>
+  )
+}
+
+function AddTransactionDialog({
+  open,
+  onOpenChange,
+  clientId,
+  statementId,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  clientId: string
+  statementId: string
+}) {
+  const importTransactions = useImportTransactions(clientId, statementId)
+  const [form, setForm] = useState({
+    data_valuta: '',
+    data_contabile: '',
+    descrizione: '',
+    importo: '',
+    tipo: 'uscita' as 'entrata' | 'uscita',
+  })
+
+  function handleChange<K extends keyof typeof form>(field: K, value: (typeof form)[K]) {
+    setForm((p) => ({ ...p, [field]: value }))
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    await importTransactions.mutateAsync([form])
+    onOpenChange(false)
+    setForm({ data_valuta: '', data_contabile: '', descrizione: '', importo: '', tipo: 'uscita' })
+    toast.success('Transazione aggiunta')
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Nuova Transazione</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Data Valuta *</Label>
+              <Input
+                type="date"
+                value={form.data_valuta}
+                onChange={(e) => handleChange('data_valuta', e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Data Contabile *</Label>
+              <Input
+                type="date"
+                value={form.data_contabile}
+                onChange={(e) => handleChange('data_contabile', e.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Descrizione *</Label>
+            <Input
+              value={form.descrizione}
+              onChange={(e) => handleChange('descrizione', e.target.value)}
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Importo (€) *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={form.importo}
+                onChange={(e) => handleChange('importo', e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tipo *</Label>
+              <Select
+                value={form.tipo}
+                onValueChange={(v) => handleChange('tipo', v as 'entrata' | 'uscita')}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="entrata">Entrata</SelectItem>
+                  <SelectItem value="uscita">Uscita</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annulla
+            </Button>
+            <Button type="submit" disabled={importTransactions.isPending}>
+              {importTransactions.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Aggiungi
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 

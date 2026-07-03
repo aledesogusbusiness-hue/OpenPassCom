@@ -41,7 +41,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { JournalEntryForm } from '@/features/journal/components/journal-entry-form'
 import type { JournalEntryFormValues } from '@/features/journal/components/journal-entry-form'
-import { useClient, useFiscalYears } from '@/hooks/use-clients'
+import { useClient, useFiscalYears, useAccounts } from '@/hooks/use-clients'
 import {
   useBilancioVerifica,
   useCreateJournalEntry,
@@ -101,6 +101,7 @@ export default function JournalPage() {
 
   const { data: client, isLoading: clientLoading } = useClient(id)
   const { data: fiscalYears = [], isLoading: fyLoading } = useFiscalYears(id)
+  const { data: accounts = [] } = useAccounts(id)
 
   const fiscalYearId = selectedFyId || ''
 
@@ -408,6 +409,7 @@ export default function JournalPage() {
             <SheetTitle>Nuova Registrazione</SheetTitle>
           </SheetHeader>
           <JournalEntryForm
+            accounts={accounts}
             onSubmit={handleCreate}
             isLoading={createEntry.isPending}
           />

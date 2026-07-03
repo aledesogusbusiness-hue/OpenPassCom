@@ -74,3 +74,22 @@ export function useAccounts(clientId: string) {
     enabled: !!clientId,
   })
 }
+
+export function useAccountTypes() {
+  return useQuery({
+    queryKey: ['account-types'],
+    queryFn: () => clientsService.listAccountTypes(),
+    staleTime: 1000 * 60 * 60,
+  })
+}
+
+export function useCreateAccount(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { account_plan_id: string; account_type_id: string; codice: string; nome: string; livello?: number; parent_id?: string }) =>
+      clientsService.createAccount(clientId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts', clientId] })
+    },
+  })
+}

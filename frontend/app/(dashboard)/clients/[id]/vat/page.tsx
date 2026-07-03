@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   BookOpen,
   Loader2,
+  Plus,
   Receipt,
   Upload,
 } from 'lucide-react'
@@ -36,7 +37,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useClient, useFiscalYears } from '@/hooks/use-clients'
+import { useJournalEntries } from '@/hooks/use-journal'
 import {
+  useCreateVatEntry,
+  useCreateVatSettlement,
+  useCreateWithholding,
   useElaborateFatturaPA,
   useFatturePa,
   useMarkSettlementVersata,
@@ -46,7 +51,7 @@ import {
   useVatSettlements,
   useWithholdingTaxes,
 } from '@/hooks/use-vat'
-import type { FatturaPAImport, VatEntry, VatSettlement, WithholdingTax } from '@/types'
+import type { FatturaPAImport, JournalEntry, VatEntry, VatSettlement, WithholdingTax } from '@/types'
 
 type VatEntryRow = VatEntry & { tipo: 'vendite' | 'acquisti' }
 
@@ -98,6 +103,10 @@ export default function VatPage() {
     account_id_debito: '',
   })
 
+  const [newEntryOpen, setNewEntryOpen] = useState(false)
+  const [newSettlementOpen, setNewSettlementOpen] = useState(false)
+  const [newWithholdingOpen, setNewWithholdingOpen] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: client, isLoading: clientLoading } = useClient(id)
@@ -116,6 +125,7 @@ export default function VatPage() {
     id,
     fiscalYearId,
   )
+  const { data: journalEntries = [] } = useJournalEntries(id, fiscalYearId)
 
   const markSettlement = useMarkSettlementVersata(id, fiscalYearId)
   const markWithholding = useMarkWithholdingVersata(id, fiscalYearId)
@@ -476,7 +486,13 @@ export default function VatPage() {
           </TabsList>
 
           {/* Registro IVA */}
-          <TabsContent value="registro" className="mt-4">
+          <TabsContent value="registro" className="mt-4 space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={() => setNewEntryOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuovo Movimento
+              </Button>
+            </div>
             <DataTable
               columns={vatColumns}
               data={vatEntries}
@@ -486,7 +502,13 @@ export default function VatPage() {
           </TabsContent>
 
           {/* Liquidazione IVA */}
-          <TabsContent value="liquidazione" className="mt-4">
+          <TabsContent value="liquidazione" className="mt-4 space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={() => setNewSettlementOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Calcola Liquidazione
+              </Button>
+            </div>
             {settlementsLoading ? (
               <div className="flex items-center justify-center h-40">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -516,7 +538,13 @@ export default function VatPage() {
           </TabsContent>
 
           {/* Ritenute d'Acconto */}
-          <TabsContent value="ritenute" className="mt-4">
+          <TabsContent value="ritenute" className="mt-4 space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={() => setNewWithholdingOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuova Ritenuta
+              </Button>
+            </div>
             <DataTable
               columns={withholdingColumns}
               data={withholdings}
@@ -627,6 +655,26 @@ export default function VatPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <NewVatEntryDialog
+        open={newEntryOpen}
+        onOpenChange={setNewEntryOpen}
+        clientId={id}
+        fiscalYearId={fiscalYearId}
+        journalEntries={journalEntries}
+      />
+      <NewSettlementDialog
+        open={newSettlementOpen}
+        onOpenChange={setNewSettlementOpen}
+        clientId={id}
+        fiscalYearId={fiscalYearId}
+      />
+      <NewWithholdingDialog
+        open={newWithholdingOpen}
+        onOpenChange={setNewWithholdingOpen}
+        clientId={id}
+        fiscalYearId={fiscalYearId}
+      />
     </div>
   )
 }
@@ -720,5 +768,388 @@ function SettlementCard({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+const ALIQUOTE_IVA = [0, 4, 5, 10, 22]
+
+function NewVatEntryDialog({
+  open,
+  onOpenChange,
+  clientId,
+  fiscalYearId,
+  journalEntries,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  clientId: string
+  fiscalYearId: string
+  journalEntries: JournalEntry[]
+}) {
+  const createEntry = useCreateVatEntry(clientId, fiscalYearId)
+  const [form, setForm] = useState({
+    tipo: 'vendite' as 'vendite' | 'acquisti',
+    journal_entry_id: '',
+    data_documento: '',
+    numero_documento: '',
+    controparte: '',
+    imponibile: '',
+    aliquota: '22',
+  })
+
+  const imposta = (
+    (parseFloat(form.imponibile || '0') * parseFloat(form.aliquota || '0')) /
+    100
+  ).toFixed(2)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    try {
+      await createEntry.mutateAsync({
+        tipo: form.tipo,
+        journal_entry_id: form.journal_entry_id,
+        data_documento: form.data_documento,
+        numero_documento: form.numero_documento || undefined,
+        controparte: form.controparte || undefined,
+        imponibile: form.imponibile,
+        aliquota: parseInt(form.aliquota, 10),
+        imposta,
+      })
+      toast.success('Movimento IVA registrato')
+      onOpenChange(false)
+      setForm({
+        tipo: 'vendite',
+        journal_entry_id: '',
+        data_documento: '',
+        numero_documento: '',
+        controparte: '',
+        imponibile: '',
+        aliquota: '22',
+      })
+    } catch {
+      toast.error('Errore durante la registrazione')
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Nuovo Movimento IVA</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Tipo *</Label>
+            <Select
+              value={form.tipo}
+              onValueChange={(v) => setForm((p) => ({ ...p, tipo: v as 'vendite' | 'acquisti' }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="vendite">Vendita</SelectItem>
+                <SelectItem value="acquisti">Acquisto</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Registrazione Contabile *</Label>
+            <Select
+              value={form.journal_entry_id}
+              onValueChange={(v) => setForm((p) => ({ ...p, journal_entry_id: v }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Seleziona registrazione..." />
+              </SelectTrigger>
+              <SelectContent>
+                {journalEntries.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    N.{e.numero_registrazione} — {e.descrizione}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Data Documento *</Label>
+              <Input
+                type="date"
+                value={form.data_documento}
+                onChange={(e) => setForm((p) => ({ ...p, data_documento: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>N. Documento</Label>
+              <Input
+                value={form.numero_documento}
+                onChange={(e) => setForm((p) => ({ ...p, numero_documento: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Controparte</Label>
+            <Input
+              value={form.controparte}
+              onChange={(e) => setForm((p) => ({ ...p, controparte: e.target.value }))}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Imponibile (€) *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={form.imponibile}
+                onChange={(e) => setForm((p) => ({ ...p, imponibile: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Aliquota %</Label>
+              <Select
+                value={form.aliquota}
+                onValueChange={(v) => setForm((p) => ({ ...p, aliquota: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALIQUOTE_IVA.map((a) => (
+                    <SelectItem key={a} value={String(a)}>
+                      {a}%
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            IVA calcolata: <span className="font-medium text-foreground">{imposta} €</span>
+          </p>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annulla
+            </Button>
+            <Button type="submit" disabled={createEntry.isPending || !form.journal_entry_id}>
+              {createEntry.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Registra
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function NewSettlementDialog({
+  open,
+  onOpenChange,
+  clientId,
+  fiscalYearId,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  clientId: string
+  fiscalYearId: string
+}) {
+  const createSettlement = useCreateVatSettlement(clientId, fiscalYearId)
+  const [periodo, setPeriodo] = useState('')
+  const [creditoPrecedente, setCreditoPrecedente] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    try {
+      await createSettlement.mutateAsync({
+        periodo,
+        credito_precedente: creditoPrecedente || undefined,
+      })
+      toast.success('Liquidazione calcolata')
+      onOpenChange(false)
+      setPeriodo('')
+      setCreditoPrecedente('')
+    } catch {
+      toast.error('Errore durante il calcolo')
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Calcola Liquidazione IVA</DialogTitle>
+          <DialogDescription>
+            Formato periodo: mensile &quot;2024-03&quot;, trimestrale &quot;2024-Q1&quot;.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Periodo *</Label>
+            <Input
+              placeholder="2024-03 oppure 2024-Q1"
+              value={periodo}
+              onChange={(e) => setPeriodo(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Credito Precedente (€)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              value={creditoPrecedente}
+              onChange={(e) => setCreditoPrecedente(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annulla
+            </Button>
+            <Button type="submit" disabled={createSettlement.isPending}>
+              {createSettlement.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Calcola
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+const WITHHOLDING_TIPO_OPTIONS = [
+  { value: 'professionale', label: 'Professionale' },
+  { value: 'occasionale', label: 'Occasionale' },
+  { value: 'autonomo', label: 'Autonomo' },
+]
+
+function NewWithholdingDialog({
+  open,
+  onOpenChange,
+  clientId,
+  fiscalYearId,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  clientId: string
+  fiscalYearId: string
+}) {
+  const createWithholding = useCreateWithholding(clientId, fiscalYearId)
+  const now = new Date()
+  const [form, setForm] = useState({
+    tipo: 'professionale',
+    imponibile: '',
+    aliquota_pct: '20',
+    mese_competenza: String(now.getMonth() + 1),
+    anno_competenza: String(now.getFullYear()),
+  })
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    try {
+      await createWithholding.mutateAsync({
+        tipo: form.tipo,
+        imponibile: form.imponibile,
+        aliquota_pct: form.aliquota_pct,
+        mese_competenza: parseInt(form.mese_competenza, 10),
+        anno_competenza: parseInt(form.anno_competenza, 10),
+      })
+      toast.success('Ritenuta registrata')
+      onOpenChange(false)
+      setForm({
+        tipo: 'professionale',
+        imponibile: '',
+        aliquota_pct: '20',
+        mese_competenza: String(now.getMonth() + 1),
+        anno_competenza: String(now.getFullYear()),
+      })
+    } catch {
+      toast.error('Errore durante la registrazione')
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Nuova Ritenuta d&apos;Acconto</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Tipo *</Label>
+            <Select
+              value={form.tipo}
+              onValueChange={(v) => setForm((p) => ({ ...p, tipo: v }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {WITHHOLDING_TIPO_OPTIONS.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Imponibile (€) *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={form.imponibile}
+                onChange={(e) => setForm((p) => ({ ...p, imponibile: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Aliquota % *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={form.aliquota_pct}
+                onChange={(e) => setForm((p) => ({ ...p, aliquota_pct: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Mese *</Label>
+              <Input
+                type="number"
+                min={1}
+                max={12}
+                value={form.mese_competenza}
+                onChange={(e) => setForm((p) => ({ ...p, mese_competenza: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Anno *</Label>
+              <Input
+                type="number"
+                value={form.anno_competenza}
+                onChange={(e) => setForm((p) => ({ ...p, anno_competenza: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annulla
+            </Button>
+            <Button type="submit" disabled={createWithholding.isPending}>
+              {createWithholding.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Registra
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

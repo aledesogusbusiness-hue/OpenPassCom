@@ -4,6 +4,9 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { Pencil, Plus, BookOpen, Receipt, Loader2 } from 'lucide-react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { toast } from 'sonner'
 import type { ColumnDef } from '@tanstack/react-table'
 import { PageHeader } from '@/components/shared/page-header'
@@ -17,6 +20,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ClientForm } from '@/features/clients/components/client-form'
 import { FiscalYearForm } from '@/features/clients/components/fiscal-year-form'
@@ -27,9 +46,102 @@ import {
   useCreateFiscalYear,
   useAccountPlan,
   useAccounts,
+  useAccountTypes,
+  useCreateAccount,
 } from '@/hooks/use-clients'
 import type { FiscalYear, Account } from '@/types'
 import type { CreateClientInput } from '@/services/clients'
+
+const accountSchema = z.object({
+  codice: z.string().min(1, 'Codice obbligatorio').max(20),
+  nome: z.string().min(1, 'Nome obbligatorio').max(255),
+  account_type_id: z.string().min(1, 'Seleziona un tipo'),
+})
+
+type AccountFormValues = z.infer<typeof accountSchema>
+
+function AccountForm({
+  onSubmit,
+  isLoading,
+}: {
+  onSubmit: (data: AccountFormValues) => Promise<void>
+  isLoading?: boolean
+}) {
+  const { data: accountTypes = [] } = useAccountTypes()
+
+  const form = useForm<AccountFormValues>({
+    resolver: zodResolver(accountSchema),
+    defaultValues: { codice: '', nome: '', account_type_id: '' },
+  })
+
+  async function handleSubmit(values: AccountFormValues) {
+    await onSubmit(values)
+    form.reset()
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="codice"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Codice *</FormLabel>
+              <FormControl>
+                <Input placeholder="Es. 20.01.001" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="nome"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Nome *</FormLabel>
+              <FormControl>
+                <Input placeholder="Es. Cassa contanti" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="account_type_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tipo Conto *</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleziona tipo..." />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {accountTypes.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.tipo_codice} — {t.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="flex justify-end pt-2">
+          <Button type="submit" disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Crea conto
+          </Button>
+        </div>
+      </form>
+    </Form>
+  )
+}
 
 const REGIME_LABELS = {
   ordinario: 'Ordinario',
@@ -56,14 +168,22 @@ export default function ClientDetailPage() {
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [fyDialogOpen, setFyDialogOpen] = useState(false)
+  const [accountDialogOpen, setAccountDialogOpen] = useState(false)
 
   const { data: client, isLoading, isError } = useClient(id)
   const { data: fiscalYears = [], isLoading: fyLoading } = useFiscalYears(id)
   const { data: accountPlan } = useAccountPlan(id)
   const { data: accounts = [], isLoading: accountsLoading } = useAccounts(id)
+  const { data: accountTypes = [] } = useAccountTypes()
 
   const updateClient = useUpdateClient(id)
   const createFiscalYear = useCreateFiscalYear(id)
+  const createAccount = useCreateAccount(id)
+
+  const accountTypeLabel = useMemo(() => {
+    const map = new Map(accountTypes.map((t) => [t.id, `${t.tipo_codice} — ${t.nome}`]))
+    return (id: string) => map.get(id) ?? id
+  }, [accountTypes])
 
   const fyColumns = useMemo<ColumnDef<FiscalYear>[]>(
     () => [
@@ -154,7 +274,7 @@ export default function ClientDetailPage() {
         header: 'Tipo',
         cell: ({ row }) => (
           <Badge variant="outline" className="text-xs">
-            {row.original.account_type_id}
+            {accountTypeLabel(row.original.account_type_id)}
           </Badge>
         ),
       },
@@ -168,7 +288,7 @@ export default function ClientDetailPage() {
         ),
       },
     ],
-    [],
+    [accountTypeLabel],
   )
 
   async function handleUpdate(data: CreateClientInput) {
@@ -185,6 +305,13 @@ export default function ClientDetailPage() {
     await createFiscalYear.mutateAsync(data)
     setFyDialogOpen(false)
     toast.success('Esercizio fiscale creato con successo')
+  }
+
+  async function handleCreateAccount(data: { codice: string; nome: string; account_type_id: string }) {
+    if (!accountPlan) return
+    await createAccount.mutateAsync({ ...data, account_plan_id: accountPlan.id })
+    setAccountDialogOpen(false)
+    toast.success('Conto creato con successo')
   }
 
   if (isLoading) {
@@ -274,12 +401,20 @@ export default function ClientDetailPage() {
 
         {/* Piano dei Conti */}
         <TabsContent value="piano" className="mt-4 space-y-4">
-          {accountPlan && (
-            <p className="text-sm font-medium text-muted-foreground">
-              Piano: {accountPlan.nome}
-              {accountPlan.is_default && ' (default)'}
-            </p>
-          )}
+          <div className="flex items-center justify-between">
+            {accountPlan ? (
+              <p className="text-sm font-medium text-muted-foreground">
+                Piano: {accountPlan.nome}
+                {accountPlan.is_default && ' (default)'}
+              </p>
+            ) : (
+              <span />
+            )}
+            <Button onClick={() => setAccountDialogOpen(true)} disabled={!accountPlan}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nuovo Conto
+            </Button>
+          </div>
           <DataTable
             columns={accountColumns}
             data={accounts}
@@ -312,6 +447,19 @@ export default function ClientDetailPage() {
           <FiscalYearForm
             onSubmit={handleCreateFiscalYear}
             isLoading={createFiscalYear.isPending}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* New account dialog */}
+      <Dialog open={accountDialogOpen} onOpenChange={setAccountDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nuovo Conto</DialogTitle>
+          </DialogHeader>
+          <AccountForm
+            onSubmit={handleCreateAccount}
+            isLoading={createAccount.isPending}
           />
         </DialogContent>
       </Dialog>

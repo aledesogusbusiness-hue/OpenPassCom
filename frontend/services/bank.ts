@@ -16,6 +16,15 @@ export interface ReconcileInput {
   note?: string
 }
 
+export interface ImportTransactionInput {
+  data_valuta: string
+  data_contabile: string
+  descrizione: string
+  importo: string
+  tipo: 'entrata' | 'uscita'
+  note?: string
+}
+
 export const bankService = {
   listStatements(clientId: string): Promise<BankStatement[]> {
     return apiClient.get<BankStatement[]>(
@@ -33,6 +42,17 @@ export const bankService = {
   listTransactions(clientId: string, statementId: string): Promise<BankTransaction[]> {
     return apiClient.get<BankTransaction[]>(
       `/api/v1/clients/${clientId}/bank-statements/${statementId}/transactions`
+    )
+  },
+
+  importTransactions(
+    clientId: string,
+    statementId: string,
+    transactions: ImportTransactionInput[]
+  ): Promise<BankTransaction[]> {
+    return apiClient.post<BankTransaction[]>(
+      `/api/v1/clients/${clientId}/bank-statements/${statementId}/transactions`,
+      transactions
     )
   },
 

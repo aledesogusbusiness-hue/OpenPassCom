@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client'
-import type { ClientEntity, FiscalYear, AccountPlan, Account } from '@/types'
+import type { ClientEntity, FiscalYear, AccountPlan, Account, AccountType } from '@/types'
 
 export type CreateClientInput = {
   ragione_sociale: string
@@ -56,5 +56,9 @@ export const clientsService = {
     data: { account_plan_id: string; account_type_id: string; codice: string; nome: string; livello?: number; parent_id?: string },
   ): Promise<Account> {
     return apiClient.post<Account>(`/api/v1/clients/${clientId}/accounts`, data)
+  },
+
+  listAccountTypes(): Promise<AccountType[]> {
+    return apiClient.get<AccountType[]>('/api/v1/account-types')
   },
 }

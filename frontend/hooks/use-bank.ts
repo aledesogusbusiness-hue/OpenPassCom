@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { bankService } from '@/services/bank'
-import type { CreateBankStatementInput, ReconcileInput } from '@/services/bank'
+import type { CreateBankStatementInput, ReconcileInput, ImportTransactionInput } from '@/services/bank'
 
 export function useBankStatements(clientId: string) {
   return useQuery({
@@ -28,6 +28,19 @@ export function useBankTransactions(clientId: string, statementId: string) {
     queryKey: ['bank-transactions', clientId, statementId],
     queryFn: () => bankService.listTransactions(clientId, statementId),
     enabled: !!clientId && !!statementId,
+  })
+}
+
+export function useImportTransactions(clientId: string, statementId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (transactions: ImportTransactionInput[]) =>
+      bankService.importTransactions(clientId, statementId, transactions),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['bank-transactions', clientId, statementId],
+      })
+    },
   })
 }
 

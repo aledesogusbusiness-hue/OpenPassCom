@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { vatService } from '@/services/vat'
-import type { ElaborateFatturaPAInput } from '@/services/vat'
+import type { ElaborateFatturaPAInput, CreateVatEntryInput, CreateWithholdingInput } from '@/services/vat'
 
 export function useVatEntries(clientId: string, fiscalYearId: string) {
   return useQuery({
@@ -12,11 +12,33 @@ export function useVatEntries(clientId: string, fiscalYearId: string) {
   })
 }
 
+export function useCreateVatEntry(clientId: string, fiscalYearId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateVatEntryInput) =>
+      vatService.createEntry(clientId, fiscalYearId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vat-entries', clientId, fiscalYearId] })
+    },
+  })
+}
+
 export function useVatSettlements(clientId: string, fiscalYearId: string) {
   return useQuery({
     queryKey: ['vat-settlements', clientId, fiscalYearId],
     queryFn: () => vatService.listSettlements(clientId, fiscalYearId),
     enabled: !!clientId && !!fiscalYearId,
+  })
+}
+
+export function useCreateVatSettlement(clientId: string, fiscalYearId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { periodo: string; credito_precedente?: string }) =>
+      vatService.createSettlement(clientId, fiscalYearId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vat-settlements', clientId, fiscalYearId] })
+    },
   })
 }
 
@@ -46,6 +68,17 @@ export function useWithholdingTaxes(clientId: string, fiscalYearId: string) {
     queryKey: ['withholding-taxes', clientId, fiscalYearId],
     queryFn: () => vatService.listWithholding(clientId, fiscalYearId),
     enabled: !!clientId && !!fiscalYearId,
+  })
+}
+
+export function useCreateWithholding(clientId: string, fiscalYearId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateWithholdingInput) =>
+      vatService.createWithholding(clientId, fiscalYearId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['withholding-taxes', clientId, fiscalYearId] })
+    },
   })
 }
 
