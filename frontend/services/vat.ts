@@ -1,8 +1,8 @@
 import { apiClient } from '@/lib/api-client'
-import type { VatEntry, VatSettlement, WithholdingTax, FatturaPAImport, F24Prospetto } from '@/types'
+import type { VatEntry, VatSettlement, WithholdingTax, FatturaPAImport, F24Ritenuta } from '@/types'
 
 export interface CreateVatEntryInput {
-  vat_register_id: string
+  tipo: 'vendite' | 'acquisti'
   journal_entry_id: string
   data_documento: string
   numero_documento?: string
@@ -21,16 +21,31 @@ export interface CreateWithholdingInput {
   journal_entry_id?: string
 }
 
+export interface ElaborateFatturaPAInput {
+  account_id_fornitore: string
+  account_id_iva: string
+  account_id_debito: string
+}
+
 export const vatService = {
-  listEntries(clientId: string, fiscalYearId: string): Promise<VatEntry[]> {
-    return apiClient.get<VatEntry[]>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/vat-entries`
-    )
+  async listEntries(clientId: string, fiscalYearId: string): Promise<Array<VatEntry & { tipo: 'vendite' | 'acquisti' }>> {
+    const [vendite, acquisti] = await Promise.all([
+      apiClient.get<VatEntry[]>(
+        `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/vat/vendite`
+      ),
+      apiClient.get<VatEntry[]>(
+        `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/vat/acquisti`
+      ),
+    ])
+    return [
+      ...vendite.map((e) => ({ ...e, tipo: 'vendite' as const })),
+      ...acquisti.map((e) => ({ ...e, tipo: 'acquisti' as const })),
+    ]
   },
 
   createEntry(clientId: string, fiscalYearId: string, data: CreateVatEntryInput): Promise<VatEntry> {
     return apiClient.post<VatEntry>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/vat-entries`,
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/vat/entries`,
       data
     )
   },
@@ -44,10 +59,10 @@ export const vatService = {
   createSettlement(
     clientId: string,
     fiscalYearId: string,
-    data: { periodo: string; tipo_periodo: string }
+    data: { periodo: string; credito_precedente?: string }
   ): Promise<VatSettlement> {
     return apiClient.post<VatSettlement>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/vat-settlements`,
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/vat-settlements/compute`,
       data
     )
   },
@@ -59,20 +74,14 @@ export const vatService = {
     data: { data_versamento: string; f24_riferimento?: string }
   ): Promise<VatSettlement> {
     return apiClient.post<VatSettlement>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/vat-settlements/${settlementId}/versata`,
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/vat-settlements/${settlementId}/mark-versata`,
       data
-    )
-  },
-
-  getF24(clientId: string, fiscalYearId: string, periodo: string): Promise<F24Prospetto> {
-    return apiClient.get<F24Prospetto>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/f24/${periodo}`
     )
   },
 
   listWithholding(clientId: string, fiscalYearId: string): Promise<WithholdingTax[]> {
     return apiClient.get<WithholdingTax[]>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/withholding-taxes`
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/withholdings`
     )
   },
 
@@ -82,7 +91,7 @@ export const vatService = {
     data: CreateWithholdingInput
   ): Promise<WithholdingTax> {
     return apiClient.post<WithholdingTax>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/withholding-taxes`,
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/withholdings`,
       data
     )
   },
@@ -94,8 +103,19 @@ export const vatService = {
     data: { data_versamento: string; f24_riferimento?: string }
   ): Promise<WithholdingTax> {
     return apiClient.post<WithholdingTax>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/withholding-taxes/${withholdingId}/versata`,
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/withholdings/${withholdingId}/mark-versata`,
       data
+    )
+  },
+
+  getWithholdingF24(
+    clientId: string,
+    fiscalYearId: string,
+    mese: number,
+    anno: number
+  ): Promise<F24Ritenuta> {
+    return apiClient.get<F24Ritenuta>(
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/withholdings/f24?mese=${mese}&anno=${anno}`
     )
   },
 
@@ -105,22 +125,23 @@ export const vatService = {
     )
   },
 
-  uploadFatturaPA(clientId: string, fiscalYearId: string, file: File): Promise<FatturaPAImport> {
-    const formData = new FormData()
-    formData.append('file', file)
-    return apiClient.postForm<FatturaPAImport>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/fatture-pa/upload`,
-      formData
+  async uploadFatturaPA(clientId: string, fiscalYearId: string, file: File): Promise<FatturaPAImport> {
+    const xmlContent = await file.text()
+    return apiClient.post<FatturaPAImport>(
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/fatture-pa/import`,
+      { filename: file.name, xml_content: xmlContent }
     )
   },
 
   elaborateFatturaPA(
     clientId: string,
     fiscalYearId: string,
-    importId: string
+    importId: string,
+    data: ElaborateFatturaPAInput
   ): Promise<FatturaPAImport> {
     return apiClient.post<FatturaPAImport>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/fatture-pa/${importId}/elaborate`
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/fatture-pa/${importId}/elaborate`,
+      data
     )
   },
 }

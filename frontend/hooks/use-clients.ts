@@ -59,18 +59,18 @@ export function useCreateFiscalYear(clientId: string) {
   })
 }
 
-export function useAccountPlans(clientId: string) {
+export function useAccountPlan(clientId: string) {
   return useQuery({
-    queryKey: ['account-plans', clientId],
-    queryFn: () => clientsService.listAccountPlans(clientId),
+    queryKey: ['account-plan', clientId],
+    queryFn: () => clientsService.getAccountPlan(clientId),
     enabled: !!clientId,
   })
 }
 
-export function useAccounts(clientId: string, planId: string) {
+export function useAccounts(clientId: string) {
   return useQuery({
-    queryKey: ['accounts', clientId, planId],
-    queryFn: () => clientsService.listAccounts(clientId, planId),
-    enabled: !!clientId && !!planId,
+    queryKey: ['accounts', clientId],
+    queryFn: () => clientsService.listAccounts(clientId),
+    enabled: !!clientId,
   })
 }

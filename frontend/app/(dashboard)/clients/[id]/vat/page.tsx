@@ -33,6 +33,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useClient, useFiscalYears } from '@/hooks/use-clients'
 import {
   useElaborateFatturaPA,
@@ -45,6 +47,8 @@ import {
   useWithholdingTaxes,
 } from '@/hooks/use-vat'
 import type { FatturaPAImport, VatEntry, VatSettlement, WithholdingTax } from '@/types'
+
+type VatEntryRow = VatEntry & { tipo: 'vendite' | 'acquisti' }
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('it-IT')
@@ -86,6 +90,13 @@ export default function VatPage() {
     id: string
     label: string
   } | null>(null)
+
+  const [elaborateTarget, setElaborateTarget] = useState<string | null>(null)
+  const [elaborateForm, setElaborateForm] = useState({
+    account_id_fornitore: '',
+    account_id_iva: '',
+    account_id_debito: '',
+  })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -153,17 +164,29 @@ export default function VatPage() {
     }
   }
 
-  async function handleElaborate(importId: string) {
+  async function handleElaborate() {
+    if (!elaborateTarget) return
     try {
-      await elaborateFatturaPA.mutateAsync(importId)
-      toast.success('Elaborazione avviata')
+      await elaborateFatturaPA.mutateAsync({ importId: elaborateTarget, data: elaborateForm })
+      toast.success('Fattura elaborata')
+      setElaborateTarget(null)
+      setElaborateForm({ account_id_fornitore: '', account_id_iva: '', account_id_debito: '' })
     } catch {
       toast.error('Elaborazione non riuscita')
     }
   }
 
-  const vatColumns = useMemo<ColumnDef<VatEntry>[]>(
+  const vatColumns = useMemo<ColumnDef<VatEntryRow>[]>(
     () => [
+      {
+        accessorKey: 'tipo',
+        header: 'Tipo',
+        cell: ({ row }) => (
+          <Badge variant={row.original.tipo === 'vendite' ? 'default' : 'secondary'}>
+            {row.original.tipo === 'vendite' ? 'Vendita' : 'Acquisto'}
+          </Badge>
+        ),
+      },
       {
         accessorKey: 'data_documento',
         header: 'Data',
@@ -351,7 +374,7 @@ export default function VatPage() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => handleElaborate(f.id)}
+              onClick={() => setElaborateTarget(f.id)}
               disabled={elaborateFatturaPA.isPending}
             >
               Elabora
@@ -544,6 +567,62 @@ export default function VatPage() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Conferma
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Elabora Fattura PA Dialog */}
+      <Dialog
+        open={!!elaborateTarget}
+        onOpenChange={(open) => !open && setElaborateTarget(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Elabora Fattura PA</DialogTitle>
+            <DialogDescription>
+              Indica i conti da usare per la registrazione contabile generata dalla fattura.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Conto Fornitore</Label>
+              <Input
+                placeholder="ID conto fornitore..."
+                value={elaborateForm.account_id_fornitore}
+                onChange={(e) =>
+                  setElaborateForm((p) => ({ ...p, account_id_fornitore: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Conto IVA</Label>
+              <Input
+                placeholder="ID conto IVA..."
+                value={elaborateForm.account_id_iva}
+                onChange={(e) =>
+                  setElaborateForm((p) => ({ ...p, account_id_iva: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Conto Debito</Label>
+              <Input
+                placeholder="ID conto debito..."
+                value={elaborateForm.account_id_debito}
+                onChange={(e) =>
+                  setElaborateForm((p) => ({ ...p, account_id_debito: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setElaborateTarget(null)}>
+              Annulla
+            </Button>
+            <Button onClick={handleElaborate} disabled={elaborateFatturaPA.isPending}>
+              {elaborateFatturaPA.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Elabora
             </Button>
           </DialogFooter>
         </DialogContent>

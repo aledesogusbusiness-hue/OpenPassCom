@@ -16,3 +16,6 @@ public/worker-*.js
 public/worker-*.js.map
 public/swe-worker-*.js
 public/swe-worker-*.js.map
+
+# Tooling internals
+.claude-flow/

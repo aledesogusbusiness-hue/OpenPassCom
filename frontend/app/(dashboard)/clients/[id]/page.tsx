@@ -18,13 +18,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { ClientForm } from '@/features/clients/components/client-form'
 import { FiscalYearForm } from '@/features/clients/components/fiscal-year-form'
 import {
@@ -32,7 +25,7 @@ import {
   useFiscalYears,
   useUpdateClient,
   useCreateFiscalYear,
-  useAccountPlans,
+  useAccountPlan,
   useAccounts,
 } from '@/hooks/use-clients'
 import type { FiscalYear, Account } from '@/types'
@@ -42,6 +35,11 @@ const REGIME_LABELS = {
   ordinario: 'Ordinario',
   semplificato: 'Semplificato',
   forfettario: 'Forfettario',
+} as const
+
+const PERIODICITA_LABELS = {
+  mensile: 'Mensile',
+  trimestrale: 'Trimestrale',
 } as const
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
@@ -58,15 +56,11 @@ export default function ClientDetailPage() {
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [fyDialogOpen, setFyDialogOpen] = useState(false)
-  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
 
   const { data: client, isLoading, isError } = useClient(id)
   const { data: fiscalYears = [], isLoading: fyLoading } = useFiscalYears(id)
-  const { data: accountPlans = [] } = useAccountPlans(id)
-  const { data: accounts = [], isLoading: accountsLoading } = useAccounts(
-    id,
-    selectedPlanId,
-  )
+  const { data: accountPlan } = useAccountPlan(id)
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts(id)
 
   const updateClient = useUpdateClient(id)
   const createFiscalYear = useCreateFiscalYear(id)
@@ -216,7 +210,7 @@ export default function ClientDetailPage() {
     <div className="p-6 space-y-6">
       <PageHeader
         title={client.ragione_sociale}
-        description={`P.IVA ${client.partita_iva}`}
+        description={client.partita_iva ? `P.IVA ${client.partita_iva}` : undefined}
         actions={
           <Button variant="outline" onClick={() => setEditDialogOpen(true)}>
             <Pencil className="mr-2 h-4 w-4" />
@@ -241,15 +235,13 @@ export default function ClientDetailPage() {
               <InfoRow label="Partita IVA" value={client.partita_iva} />
               <InfoRow
                 label="Regime Fiscale"
-                value={REGIME_LABELS[client.regime_fiscale]}
+                value={REGIME_LABELS[client.fiscal_regime]}
               />
-              <InfoRow label="Email" value={client.email} />
-              <InfoRow label="PEC" value={client.pec} />
-              <InfoRow label="Telefono" value={client.telefono} />
-              <InfoRow label="Indirizzo" value={client.indirizzo} />
-              <InfoRow label="CAP" value={client.cap} />
-              <InfoRow label="Città" value={client.citta} />
-              <InfoRow label="Provincia" value={client.provincia} />
+              <InfoRow
+                label="Periodicità IVA"
+                value={client.periodicita_iva ? PERIODICITA_LABELS[client.periodicita_iva] : undefined}
+              />
+              <InfoRow label="Note" value={client.note} />
               <div className="py-3 grid grid-cols-3 gap-4">
                 <dt className="text-sm font-medium text-muted-foreground">Stato</dt>
                 <dd className="col-span-2">
@@ -282,37 +274,18 @@ export default function ClientDetailPage() {
 
         {/* Piano dei Conti */}
         <TabsContent value="piano" className="mt-4 space-y-4">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-muted-foreground">
-              Piano dei conti
-            </span>
-            <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
-              <SelectTrigger className="w-64">
-                <SelectValue placeholder="Seleziona piano..." />
-              </SelectTrigger>
-              <SelectContent>
-                {accountPlans.map((plan) => (
-                  <SelectItem key={plan.id} value={plan.id}>
-                    {plan.nome}
-                    {plan.is_default && ' (default)'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {selectedPlanId ? (
-            <DataTable
-              columns={accountColumns}
-              data={accounts}
-              isLoading={accountsLoading}
-              searchPlaceholder="Cerca per codice o nome..."
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              Seleziona un piano dei conti per visualizzare i conti.
+          {accountPlan && (
+            <p className="text-sm font-medium text-muted-foreground">
+              Piano: {accountPlan.nome}
+              {accountPlan.is_default && ' (default)'}
             </p>
           )}
+          <DataTable
+            columns={accountColumns}
+            data={accounts}
+            isLoading={accountsLoading}
+            searchPlaceholder="Cerca per codice o nome..."
+          />
         </TabsContent>
       </Tabs>
 

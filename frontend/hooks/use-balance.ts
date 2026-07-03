@@ -20,49 +20,41 @@ export function useContoEconomico(clientId: string, fiscalYearId: string) {
   })
 }
 
-export function useFixedAssets(clientId: string, fiscalYearId: string) {
+export function useFixedAssets(clientId: string) {
   return useQuery({
-    queryKey: ['fixed-assets', clientId, fiscalYearId],
-    queryFn: () => balanceService.listFixedAssets(clientId, fiscalYearId),
-    enabled: !!clientId && !!fiscalYearId,
+    queryKey: ['fixed-assets', clientId],
+    queryFn: () => balanceService.listFixedAssets(clientId),
+    enabled: !!clientId,
   })
 }
 
-export function useCreateFixedAsset(clientId: string, fiscalYearId: string) {
+export function useCreateFixedAsset(clientId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (data: CreateFixedAssetInput) =>
-      balanceService.createFixedAsset(clientId, fiscalYearId, data),
+      balanceService.createFixedAsset(clientId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fixed-assets', clientId, fiscalYearId] })
+      queryClient.invalidateQueries({ queryKey: ['fixed-assets', clientId] })
     },
   })
 }
 
-export function useDepreciate(clientId: string, fiscalYearId: string) {
+export function useComputePlan(clientId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (assetId: string) =>
-      balanceService.depreciate(clientId, fiscalYearId, assetId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fixed-assets', clientId, fiscalYearId] })
-      queryClient.invalidateQueries({
-        queryKey: ['depreciation-schedule', clientId, fiscalYearId],
-      })
+    mutationFn: (assetId: string) => balanceService.computePlan(clientId, assetId),
+    onSuccess: (_data, assetId) => {
+      queryClient.invalidateQueries({ queryKey: ['fixed-assets', clientId] })
+      queryClient.invalidateQueries({ queryKey: ['depreciation-plan', clientId, assetId] })
     },
   })
 }
 
-export function useDepreciationSchedule(
-  clientId: string,
-  fiscalYearId: string,
-  assetId: string,
-) {
+export function useDepreciationPlan(clientId: string, assetId: string) {
   return useQuery({
-    queryKey: ['depreciation-schedule', clientId, fiscalYearId, assetId],
-    queryFn: () =>
-      balanceService.getDepreciationSchedule(clientId, fiscalYearId, assetId),
-    enabled: !!clientId && !!fiscalYearId && !!assetId,
+    queryKey: ['depreciation-plan', clientId, assetId],
+    queryFn: () => balanceService.getPlan(clientId, assetId),
+    enabled: !!clientId && !!assetId,
   })
 }
 

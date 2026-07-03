@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { vatService } from '@/services/vat'
-import type { CreateWithholdingInput } from '@/services/vat'
+import type { ElaborateFatturaPAInput } from '@/services/vat'
 
 export function useVatEntries(clientId: string, fiscalYearId: string) {
   return useQuery({
@@ -95,8 +95,8 @@ export function useUploadFatturaPA(clientId: string, fiscalYearId: string) {
 export function useElaborateFatturaPA(clientId: string, fiscalYearId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (importId: string) =>
-      vatService.elaborateFatturaPA(clientId, fiscalYearId, importId),
+    mutationFn: ({ importId, data }: { importId: string; data: ElaborateFatturaPAInput }) =>
+      vatService.elaborateFatturaPA(clientId, fiscalYearId, importId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['fatture-pa', clientId, fiscalYearId],

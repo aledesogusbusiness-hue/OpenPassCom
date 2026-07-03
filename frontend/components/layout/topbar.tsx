@@ -24,10 +24,15 @@ function UserMenu() {
   }, [open])
 
   const initials = user
-    ? `${user.nome?.[0] ?? ''}${user.cognome?.[0] ?? ''}`.toUpperCase() || user.email[0].toUpperCase()
+    ? user.full_name
+        .split(' ')
+        .map((p) => p[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase() || user.email[0].toUpperCase()
     : '?'
 
-  const displayName = user ? `${user.nome ?? ''} ${user.cognome ?? ''}`.trim() || user.email : ''
+  const displayName = user ? user.full_name || user.email : ''
 
   return (
     <div ref={ref} className="relative">

@@ -3,16 +3,11 @@ import type { ClientEntity, FiscalYear, AccountPlan, Account } from '@/types'
 
 export type CreateClientInput = {
   ragione_sociale: string
-  codice_fiscale: string
-  partita_iva: string
-  regime_fiscale: 'ordinario' | 'semplificato' | 'forfettario'
-  email?: string
-  pec?: string
-  telefono?: string
-  indirizzo?: string
-  cap?: string
-  citta?: string
-  provincia?: string
+  codice_fiscale?: string
+  partita_iva?: string
+  fiscal_regime: 'ordinario' | 'semplificato' | 'forfettario'
+  periodicita_iva?: 'mensile' | 'trimestrale'
+  note?: string
 }
 
 export const clientsService = {
@@ -29,7 +24,7 @@ export const clientsService = {
   },
 
   update(id: string, data: Partial<CreateClientInput>): Promise<ClientEntity> {
-    return apiClient.patch<ClientEntity>(`/api/v1/clients/${id}`, data)
+    return apiClient.put<ClientEntity>(`/api/v1/clients/${id}`, data)
   },
 
   listFiscalYears(clientId: string): Promise<FiscalYear[]> {
@@ -43,26 +38,23 @@ export const clientsService = {
     return apiClient.post<FiscalYear>(`/api/v1/clients/${clientId}/fiscal-years`, data)
   },
 
-  listAccountPlans(clientId: string): Promise<AccountPlan[]> {
-    return apiClient.get<AccountPlan[]>(`/api/v1/clients/${clientId}/account-plans`)
+  closeFiscalYear(clientId: string, yearId: string): Promise<FiscalYear> {
+    return apiClient.post<FiscalYear>(`/api/v1/clients/${clientId}/fiscal-years/${yearId}/close`, {})
   },
 
-  createAccountPlan(clientId: string, data: { nome: string }): Promise<AccountPlan> {
-    return apiClient.post<AccountPlan>(`/api/v1/clients/${clientId}/account-plans`, data)
+  getAccountPlan(clientId: string): Promise<AccountPlan> {
+    return apiClient.get<AccountPlan>(`/api/v1/clients/${clientId}/account-plan`)
   },
 
-  listAccounts(clientId: string, planId: string): Promise<Account[]> {
-    return apiClient.get<Account[]>(`/api/v1/clients/${clientId}/account-plans/${planId}/accounts`)
+  listAccounts(clientId: string, accountTypeId?: string): Promise<Account[]> {
+    const query = accountTypeId ? `?account_type_id=${accountTypeId}` : ''
+    return apiClient.get<Account[]>(`/api/v1/clients/${clientId}/accounts${query}`)
   },
 
   createAccount(
     clientId: string,
-    planId: string,
-    data: { codice: string; nome: string; account_type_id: string; parent_id?: string },
+    data: { account_plan_id: string; account_type_id: string; codice: string; nome: string; livello?: number; parent_id?: string },
   ): Promise<Account> {
-    return apiClient.post<Account>(
-      `/api/v1/clients/${clientId}/account-plans/${planId}/accounts`,
-      data,
-    )
+    return apiClient.post<Account>(`/api/v1/clients/${clientId}/accounts`, data)
   },
 }

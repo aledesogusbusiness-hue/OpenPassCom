@@ -325,7 +325,7 @@ export default function JournalPage() {
               <div className="flex items-center justify-center h-40">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
-            ) : !bilancio ? (
+            ) : !bilancio || bilancio.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">
                 Nessun dato disponibile.
               </p>
@@ -346,12 +346,15 @@ export default function JournalPage() {
                       <th className="h-10 px-4 text-right font-medium text-muted-foreground tabular-nums">
                         Avere
                       </th>
+                      <th className="h-10 px-4 text-right font-medium text-muted-foreground tabular-nums">
+                        Saldo
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {bilancio.righe.map((riga, i) => (
+                    {bilancio.map((riga) => (
                       <tr
-                        key={i}
+                        key={riga.account_id}
                         className="border-b last:border-0 hover:bg-muted/25 transition-colors"
                       >
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground tabular-nums">
@@ -359,10 +362,13 @@ export default function JournalPage() {
                         </td>
                         <td className="px-4 py-3">{riga.nome}</td>
                         <td className="px-4 py-3 text-right tabular-nums font-mono text-xs">
-                          {fmtCurrency(riga.dare_totale)}
+                          {fmtCurrency(riga.tot_dare)}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums font-mono text-xs">
-                          {fmtCurrency(riga.avere_totale)}
+                          {fmtCurrency(riga.tot_avere)}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums font-mono text-xs">
+                          {fmtCurrency(riga.saldo)}
                         </td>
                       </tr>
                     ))}
@@ -373,11 +379,16 @@ export default function JournalPage() {
                         Totale
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-mono text-sm">
-                        {fmtCurrency(bilancio.totale_dare)}
+                        {fmtCurrency(
+                          bilancio.reduce((sum, r) => sum + parseFloat(r.tot_dare), 0).toString()
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-mono text-sm">
-                        {fmtCurrency(bilancio.totale_avere)}
+                        {fmtCurrency(
+                          bilancio.reduce((sum, r) => sum + parseFloat(r.tot_avere), 0).toString()
+                        )}
                       </td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>

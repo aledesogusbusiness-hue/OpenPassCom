@@ -7,7 +7,8 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { Pencil, CheckCheck, Plus } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { useTasks, useCreateTask, useUpdateTask } from '@/hooks/use-studio'
+import { useTasks, useCreateTask, useUpdateTask, useCompleteTask } from '@/hooks/use-studio'
+import { TASK_TIPO_OPTIONS, TASK_PRIORITA_OPTIONS } from '@/lib/constants'
 import { PageHeader } from '@/components/shared/page-header'
 import DataTable from '@/components/shared/data-table'
 import { Button } from '@/components/ui/button'
@@ -29,12 +30,9 @@ const taskSchema = z.object({
 
 type TaskFormValues = z.infer<typeof taskSchema>
 
-const TIPI = ['dichiarazione', 'contabilita', 'iva', 'f24', 'bilancio', 'altro']
-const PRIORITA = ['alta', 'media', 'bassa']
-
 function prioritaBadgeVariant(p: string) {
-  if (p === 'alta') return 'destructive' as const
-  if (p === 'media') return 'warning' as const
+  if (p === 'urgente') return 'destructive' as const
+  if (p === 'alta') return 'warning' as const
   return 'secondary' as const
 }
 
@@ -79,17 +77,17 @@ function TaskDialog({ task, open, onOpenChange }: TaskDialogProps) {
   }, [open, task, form])
 
   function onSubmit(values: TaskFormValues) {
-    const payload = {
-      titolo: values.titolo,
-      tipo: values.tipo,
-      priorita: values.priorita || undefined,
-      data_scadenza: values.data_scadenza || undefined,
-      descrizione: values.descrizione || undefined,
-    }
-
     if (isEdit && task) {
       updateTask.mutate(
-        { id: task.id, data: payload },
+        {
+          id: task.id,
+          data: {
+            titolo: values.titolo,
+            priorita: values.priorita || undefined,
+            data_scadenza: values.data_scadenza || undefined,
+            descrizione: values.descrizione || undefined,
+          },
+        },
         {
           onSuccess: () => {
             toast.success('Task aggiornato con successo')
@@ -99,13 +97,22 @@ function TaskDialog({ task, open, onOpenChange }: TaskDialogProps) {
         }
       )
     } else {
-      createTask.mutate(payload, {
-        onSuccess: () => {
-          toast.success('Task creato con successo')
-          onOpenChange(false)
+      createTask.mutate(
+        {
+          titolo: values.titolo,
+          tipo: values.tipo,
+          priorita: values.priorita || undefined,
+          data_scadenza: values.data_scadenza || undefined,
+          descrizione: values.descrizione || undefined,
         },
-        onError: () => toast.error('Errore durante la creazione del task'),
-      })
+        {
+          onSuccess: () => {
+            toast.success('Task creato con successo')
+            onOpenChange(false)
+          },
+          onError: () => toast.error('Errore durante la creazione del task'),
+        }
+      )
     }
   }
 
@@ -140,15 +147,15 @@ function TaskDialog({ task, open, onOpenChange }: TaskDialogProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Tipo *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isEdit}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Seleziona tipo" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {TIPI.map((t) => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        {TASK_TIPO_OPTIONS.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -170,8 +177,8 @@ function TaskDialog({ task, open, onOpenChange }: TaskDialogProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {PRIORITA.map((p) => (
-                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        {TASK_PRIORITA_OPTIONS.map((p) => (
+                          <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -233,10 +240,11 @@ export default function StudioPage() {
   const [editTask, setEditTask] = React.useState<StudioTask | null>(null)
   const { data: tasks, isLoading } = useTasks()
   const updateTask = useUpdateTask()
+  const completeTask = useCompleteTask()
 
   function markComplete(task: StudioTask) {
-    updateTask.mutate(
-      { id: task.id, data: { stato: 'completato' } },
+    completeTask.mutate(
+      { id: task.id, completatoIl: new Date().toISOString().slice(0, 10) },
       {
         onSuccess: () => toast.success(`"${task.titolo}" completato`),
         onError: () => toast.error('Errore durante l\'aggiornamento'),
@@ -306,7 +314,7 @@ export default function StudioPage() {
               variant="ghost"
               size="sm"
               onClick={() => markComplete(task)}
-              disabled={isComplete || updateTask.isPending}
+              disabled={isComplete || completeTask.isPending}
               title="Segna come completato"
             >
               <CheckCheck className="h-4 w-4" />

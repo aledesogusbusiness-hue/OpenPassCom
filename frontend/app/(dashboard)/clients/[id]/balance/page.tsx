@@ -32,20 +32,20 @@ import {
   useContoEconomico,
   useFixedAssets,
   useCreateFixedAsset,
-  useDepreciate,
+  useComputePlan,
   useCloseYear,
 } from '@/hooks/use-balance'
 import { FixedAssetForm } from '@/features/balance/components/fixed-asset-form'
 import type { FixedAssetFormValues } from '@/features/balance/components/fixed-asset-form'
 import { formatCurrency, cn } from '@/lib/utils'
-import type { FixedAsset, YearClosing } from '@/types'
+import type { FixedAsset, YearClosing, VoceBilancio } from '@/types'
 
 function AccountTable({
   rows,
   total,
   totalLabel,
 }: {
-  rows: Array<{ conto: string; importo: string }>
+  rows: VoceBilancio[]
   total: string
   totalLabel: string
 }) {
@@ -59,11 +59,11 @@ function AccountTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-b last:border-0 hover:bg-muted/40">
-              <td className="py-2 pr-4">{r.conto}</td>
+          {rows.map((r) => (
+            <tr key={r.codice} className="border-b last:border-0 hover:bg-muted/40">
+              <td className="py-2 pr-4">{r.codice} — {r.nome}</td>
               <td className="py-2 text-right tabular-nums font-variant-numeric">
-                {formatCurrency(r.importo)}
+                {formatCurrency(r.saldo)}
               </td>
             </tr>
           ))}
@@ -96,10 +96,10 @@ export default function BalancePage() {
 
   const spQuery = useStatoPatrimoniale(id, activeFyId)
   const ceQuery = useContoEconomico(id, activeFyId)
-  const assetsQuery = useFixedAssets(id, activeFyId)
+  const assetsQuery = useFixedAssets(id)
 
-  const createAsset = useCreateFixedAsset(id, activeFyId)
-  const depreciate = useDepreciate(id, activeFyId)
+  const createAsset = useCreateFixedAsset(id)
+  const computePlan = useComputePlan(id)
   const closeYear = useCloseYear(id, activeFyId)
 
   const utile = parseFloat(ceQuery.data?.utile_perdita ?? '0')
@@ -112,7 +112,7 @@ export default function BalancePage() {
   }
 
   async function handleDepreciate(assetId: string) {
-    await depreciate.mutateAsync(assetId)
+    await computePlan.mutateAsync(assetId)
     toast.success('Ammortamento calcolato')
   }
 
@@ -174,10 +174,10 @@ export default function BalancePage() {
           <Button
             variant="outline"
             size="sm"
-            disabled={depreciate.isPending}
+            disabled={computePlan.isPending}
             onClick={() => handleDepreciate(row.original.id)}
           >
-            {depreciate.isPending ? (
+            {computePlan.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Calculator className="h-3.5 w-3.5" />
@@ -187,7 +187,7 @@ export default function BalancePage() {
         ),
       },
     ],
-    [depreciate.isPending],
+    [computePlan.isPending],
   )
 
   if (fyLoading) {
@@ -246,7 +246,7 @@ export default function BalancePage() {
                   Attivo
                 </h3>
                 <AccountTable
-                  rows={spQuery.data.attivo}
+                  rows={spQuery.data.attivo.voci}
                   total={spQuery.data.totale_attivo}
                   totalLabel="Totale Attivo"
                 />
@@ -256,7 +256,7 @@ export default function BalancePage() {
                   Passivo
                 </h3>
                 <AccountTable
-                  rows={spQuery.data.passivo}
+                  rows={spQuery.data.passivo.voci}
                   total={spQuery.data.totale_passivo}
                   totalLabel="Totale Passivo"
                 />
@@ -284,8 +284,8 @@ export default function BalancePage() {
                     Ricavi
                   </h3>
                   <AccountTable
-                    rows={ceQuery.data.ricavi}
-                    total={ceQuery.data.totale_ricavi}
+                    rows={ceQuery.data.ricavi.voci}
+                    total={ceQuery.data.ricavi.totale}
                     totalLabel="Totale Ricavi"
                   />
                 </div>
@@ -294,8 +294,8 @@ export default function BalancePage() {
                     Costi
                   </h3>
                   <AccountTable
-                    rows={ceQuery.data.costi}
-                    total={ceQuery.data.totale_costi}
+                    rows={ceQuery.data.costi.voci}
+                    total={ceQuery.data.costi.totale}
                     totalLabel="Totale Costi"
                   />
                 </div>

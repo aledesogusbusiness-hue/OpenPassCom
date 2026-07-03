@@ -20,7 +20,7 @@ import { useClients, useCreateClient } from '@/hooks/use-clients'
 import type { ClientEntity } from '@/types'
 import type { CreateClientInput } from '@/services/clients'
 
-const REGIME_LABELS: Record<ClientEntity['regime_fiscale'], string> = {
+const REGIME_LABELS: Record<ClientEntity['fiscal_regime'], string> = {
   ordinario: 'Ordinario',
   semplificato: 'Semplificato',
   forfettario: 'Forfettario',
@@ -65,11 +65,11 @@ export default function ClientsPage() {
         ),
       },
       {
-        accessorKey: 'regime_fiscale',
+        accessorKey: 'fiscal_regime',
         header: 'Regime Fiscale',
         cell: ({ row }) => (
           <Badge variant="outline">
-            {REGIME_LABELS[row.original.regime_fiscale]}
+            {REGIME_LABELS[row.original.fiscal_regime]}
           </Badge>
         ),
       },

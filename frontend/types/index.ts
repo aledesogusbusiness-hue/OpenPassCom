@@ -1,25 +1,31 @@
-export interface User { id: string; email: string; nome: string; cognome: string; role: string }
-export interface ClientEntity { id: string; studio_id: string; ragione_sociale: string; codice_fiscale: string; partita_iva: string; regime_fiscale: 'ordinario' | 'semplificato' | 'forfettario'; email?: string; pec?: string; telefono?: string; indirizzo?: string; cap?: string; citta?: string; provincia?: string; is_active: boolean; created_at: string }
-export interface FiscalYear { id: string; client_entity_id: string; anno: number; data_inizio: string; data_fine: string; stato: string }
-export interface AccountPlan { id: string; nome: string; is_default: boolean; created_at: string }
-export interface Account { id: string; codice: string; nome: string; account_type_id: string; parent_id?: string; livello: number; is_active: boolean }
+export interface User { id: string; studio_id: string; email: string; full_name: string; is_active: boolean; role: string; created_at: string }
+export interface ClientEntity { id: string; studio_id: string; ragione_sociale: string; codice_fiscale?: string; partita_iva?: string; fiscal_regime: 'ordinario' | 'semplificato' | 'forfettario'; periodicita_iva?: 'mensile' | 'trimestrale'; is_active: boolean; note?: string; created_at: string; updated_at: string }
+export interface FiscalYear { id: string; studio_id: string; client_entity_id: string; anno: number; data_inizio: string; data_fine: string; stato: string; created_at: string }
+export interface AccountPlan { id: string; studio_id: string; client_entity_id: string; nome: string; is_default: boolean; created_at: string }
+export interface Account { id: string; studio_id: string; account_plan_id: string; account_type_id: string; codice: string; nome: string; is_active: boolean; livello: number; parent_id?: string; created_at: string; children: Account[] }
 export interface AccountType { id: string; tipo_codice: string; nome: string; posizione_bilancio: string }
-export interface JournalLine { id: string; journal_entry_id: string; account_id: string; dare: string; avere: string; descrizione?: string }
-export interface JournalEntry { id: string; numero_registrazione: number; data_registrazione: string; descrizione: string; causale: string; stato: 'draft' | 'posted' | 'reversed'; lines?: JournalLine[]; created_at: string }
-export interface VatEntry { id: string; data_documento: string; numero_documento?: string; controparte?: string; imponibile: string; aliquota: number; imposta: string; created_at: string }
-export interface VatSettlement { id: string; periodo: string; tipo_periodo: string; iva_vendite: string; iva_acquisti: string; credito_precedente: string; debito_versare: string; credito_periodo: string; stato: string; data_versamento?: string; f24_riferimento?: string }
-export interface WithholdingTax { id: string; tipo: string; codice_tributo: string; imponibile: string; aliquota_pct: string; importo_ritenuta: string; mese_competenza: number; anno_competenza: number; stato: string; data_versamento?: string; f24_riferimento?: string }
-export interface FatturaPAImport { id: string; filename: string; stato: string; errore_msg?: string; created_at: string }
-export interface FixedAsset { id: string; codice: string; descrizione: string; categoria: string; costo_storico: string; data_acquisto: string; aliquota_ammortamento: string; metodo: string; is_active: boolean }
+export interface JournalLine { id: string; studio_id: string; journal_entry_id: string; account_id: string; dare: string; avere: string; descrizione?: string }
+export interface JournalEntry { id: string; studio_id: string; client_entity_id: string; fiscal_year_id: string; numero_registrazione: number; data_registrazione: string; descrizione: string; causale: string; stato: 'draft' | 'posted' | 'reversed'; reversed_by?: string; created_by?: string; created_at: string; lines?: JournalLine[] }
+export interface VatEntry { id: string; studio_id: string; vat_register_id: string; journal_entry_id: string; data_documento: string; numero_documento?: string; controparte?: string; imponibile: string; aliquota: number; imposta: string; created_at: string }
+export interface VatLiquidazione { periodo: string; iva_vendite: string; iva_acquisti: string; debito_credito: string }
+export interface VatSettlement { id: string; studio_id: string; client_entity_id: string; fiscal_year_id: string; periodo: string; tipo_periodo: string; iva_vendite: string; iva_acquisti: string; credito_precedente: string; debito_versare: string; credito_periodo: string; stato: string; data_versamento?: string; f24_riferimento?: string; created_at: string; created_by?: string }
+export interface WithholdingTax { id: string; studio_id: string; client_entity_id: string; fiscal_year_id: string; journal_entry_id?: string; tipo: string; codice_tributo: string; imponibile: string; aliquota_pct: string; importo_ritenuta: string; mese_competenza: number; anno_competenza: number; stato: string; data_versamento?: string; f24_riferimento?: string; created_at: string }
+export interface FatturaPAImport { id: string; studio_id: string; client_entity_id: string; fiscal_year_id: string; filename: string; stato: string; parsed_data?: Record<string, unknown>; journal_entry_id?: string; errore_msg?: string; created_at: string }
+export interface FixedAsset { id: string; codice: string; descrizione: string; categoria: string; costo_storico: string; data_acquisto: string; aliquota_ammortamento: string; metodo: string; is_active: boolean; note?: string }
 export interface DepreciationEntry { id: string; anno: number; valore_iniziale: string; quota_ammortamento: string; fondo_ammortamento: string; valore_netto_finale: string; stato: string }
-export interface YearClosing { id: string; fiscal_year_id: string; stato: string; data_chiusura?: string; totale_attivo?: string; totale_passivo?: string; totale_ricavi?: string; totale_costi?: string; utile_perdita?: string }
-export interface DashboardSummary { totale_clienti: number; clienti_attivi: number; esercizi_aperti: number; registrazioni_bozza: number; registrazioni_postate: number; scadenze_aperte: number; task_aperti: number; task_urgenti: number }
-export interface StudioTask { id: string; titolo: string; tipo: string; priorita: string; stato: string; data_scadenza?: string; client_entity_id?: string; fiscal_year_id?: string; descrizione?: string; assegnato_a?: string; created_at: string }
-export interface BankStatement { id: string; client_entity_id: string; iban: string; data_inizio: string; data_fine: string; saldo_iniziale: string; saldo_finale: string; filename?: string; created_at: string }
-export interface BankTransaction { id: string; bank_statement_id: string; data_valuta: string; data_contabile: string; descrizione: string; importo: string; tipo: 'entrata' | 'uscita'; stato_riconciliazione: 'da_riconciliare' | 'riconciliata' | 'irrilevante'; journal_entry_id?: string }
-export interface ConservatoreLog { id: string; tipo_documento: string; stato: string; data_invio?: string; riferimento_esterno?: string; periodo?: string; note?: string; created_at: string }
-export interface BilancioVerifica { righe: Array<{ codice: string; nome: string; dare_totale: string; avere_totale: string }>; totale_dare: string; totale_avere: string }
-export interface StatoPatrimoniale { attivo: Array<{ conto: string; importo: string }>; passivo: Array<{ conto: string; importo: string }>; totale_attivo: string; totale_passivo: string }
-export interface ContoEconomico { ricavi: Array<{ conto: string; importo: string }>; costi: Array<{ conto: string; importo: string }>; totale_ricavi: string; totale_costi: string; utile_perdita: string }
-export interface F24Prospetto { periodo: string; iva_dovuta: string; data_scadenza: string }
+export interface YearClosing { id: string; fiscal_year_id: string; stato: string; data_chiusura?: string; totale_attivo?: string; totale_passivo?: string; totale_ricavi?: string; totale_costi?: string; utile_perdita?: string; note?: string }
+export interface DashboardSummary { clienti_attivi: number; task_aperti: number; task_urgenti: number; scadenze_questa_settimana: number; liquidazioni_bozza: number; ritenute_da_versare: number; fatture_importate: number }
+export interface StudioTask { id: string; studio_id: string; client_entity_id?: string; fiscal_year_id?: string; titolo: string; descrizione?: string; tipo: string; priorita: string; stato: string; data_scadenza?: string; assegnato_a?: string; completato_il?: string; note?: string; created_at: string; created_by?: string }
+export interface BankStatement { id: string; studio_id: string; client_entity_id: string; iban: string; data_inizio: string; data_fine: string; saldo_iniziale: string; saldo_finale: string; filename?: string; created_at: string; created_by?: string }
+export interface BankTransaction { id: string; studio_id: string; bank_statement_id: string; data_valuta: string; data_contabile: string; descrizione: string; importo: string; tipo: 'entrata' | 'uscita'; stato_riconciliazione: 'da_riconciliare' | 'riconciliata' | 'irrilevante'; journal_entry_id?: string; scheduled_payment_id?: string; note?: string }
+export interface ReconciliationSummary { totale: number; riconciliate: number; da_riconciliare: number; irrilevanti: number; saldo_riconciliato: string }
+export interface ConservatoreLog { id: string; studio_id: string; client_entity_id: string; tipo_documento: string; fiscal_year_id?: string; periodo?: string; stato: string; data_invio?: string; riferimento_esterno?: string; note?: string; created_at: string; created_by?: string }
+export interface BilancioVoce { account_id: string; codice: string; nome: string; tot_dare: string; tot_avere: string; saldo: string }
+export interface VoceBilancio { codice: string; nome: string; saldo: string }
+export interface StatoPatrimoniale { attivo: { voci: VoceBilancio[]; totale: string }; passivo: { voci: VoceBilancio[]; totale: string }; totale_attivo: string; totale_passivo: string; quadrato: boolean }
+export interface ContoEconomico { ricavi: { voci: VoceBilancio[]; totale: string }; costi: { voci: VoceBilancio[]; totale: string }; risultato_operativo: string; utile_perdita: string }
+export interface F24Riga { codice_tributo: string; descrizione: string; importo: string }
+export interface F24Prospetto { periodo: string; tipo_periodo: string; sezione_erario: F24Riga[]; sezione_contributi: F24Riga[]; totale_saldo: string }
+export interface F24RitenutaRiga { codice_tributo: string; importo: string }
+export interface F24Ritenuta { mese: number; anno: number; righe: F24RitenutaRiga[]; totale: string }
 export interface ApiError { detail: string | Array<{ msg: string; loc: string[] }> }

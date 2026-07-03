@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client'
-import type { JournalEntry, BilancioVerifica } from '@/types'
+import type { JournalEntry, BilancioVoce } from '@/types'
 
 export interface CreateJournalLineInput {
   account_id: string
@@ -47,9 +47,9 @@ export const journalService = {
     )
   },
 
-  getBilancioVerifica(clientId: string, fiscalYearId: string): Promise<BilancioVerifica> {
-    return apiClient.get<BilancioVerifica>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/journal-entries/bilancio-verifica`
+  getBilancioVerifica(clientId: string, fiscalYearId: string): Promise<BilancioVoce[]> {
+    return apiClient.get<BilancioVoce[]>(
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/bilancio-verifica`
     )
   },
 }

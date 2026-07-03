@@ -16,52 +16,41 @@ export interface CreateFixedAssetInput {
 export const balanceService = {
   getStatoPatrimoniale(clientId: string, fiscalYearId: string): Promise<StatoPatrimoniale> {
     return apiClient.get<StatoPatrimoniale>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/balance/stato-patrimoniale`
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/stato-patrimoniale`
     )
   },
 
   getContoEconomico(clientId: string, fiscalYearId: string): Promise<ContoEconomico> {
     return apiClient.get<ContoEconomico>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/balance/conto-economico`
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/conto-economico`
     )
   },
 
   closeYear(clientId: string, fiscalYearId: string): Promise<YearClosing> {
     return apiClient.post<YearClosing>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/close`
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/close`,
+      {}
     )
   },
 
-  listFixedAssets(clientId: string, fiscalYearId: string): Promise<FixedAsset[]> {
-    return apiClient.get<FixedAsset[]>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/fixed-assets`
+  listFixedAssets(clientId: string): Promise<FixedAsset[]> {
+    return apiClient.get<FixedAsset[]>(`/api/v1/clients/${clientId}/fixed-assets`)
+  },
+
+  createFixedAsset(clientId: string, data: CreateFixedAssetInput): Promise<FixedAsset> {
+    return apiClient.post<FixedAsset>(`/api/v1/clients/${clientId}/fixed-assets`, data)
+  },
+
+  computePlan(clientId: string, assetId: string): Promise<DepreciationEntry[]> {
+    return apiClient.post<DepreciationEntry[]>(
+      `/api/v1/clients/${clientId}/fixed-assets/${assetId}/compute-plan`,
+      {}
     )
   },
 
-  createFixedAsset(
-    clientId: string,
-    fiscalYearId: string,
-    data: CreateFixedAssetInput
-  ): Promise<FixedAsset> {
-    return apiClient.post<FixedAsset>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/fixed-assets`,
-      data
-    )
-  },
-
-  depreciate(clientId: string, fiscalYearId: string, assetId: string): Promise<DepreciationEntry> {
-    return apiClient.post<DepreciationEntry>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/fixed-assets/${assetId}/depreciate`
-    )
-  },
-
-  getDepreciationSchedule(
-    clientId: string,
-    fiscalYearId: string,
-    assetId: string
-  ): Promise<DepreciationEntry[]> {
+  getPlan(clientId: string, assetId: string): Promise<DepreciationEntry[]> {
     return apiClient.get<DepreciationEntry[]>(
-      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/fixed-assets/${assetId}/depreciation-schedule`
+      `/api/v1/clients/${clientId}/fixed-assets/${assetId}/plan`
     )
   },
 }

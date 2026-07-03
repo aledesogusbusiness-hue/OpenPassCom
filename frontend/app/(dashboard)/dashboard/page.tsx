@@ -160,8 +160,8 @@ export default function DashboardPage() {
           icon={<Users />}
         />
         <StatCard
-          title="Esercizi Aperti"
-          value={dashboard?.esercizi_aperti ?? 0}
+          title="Scadenze Settimana"
+          value={dashboard?.scadenze_questa_settimana ?? 0}
           icon={<Calendar />}
         />
         <StatCard
@@ -220,12 +220,12 @@ export default function DashboardPage() {
               <Badge variant="destructive">{dashboard?.task_urgenti ?? 0}</Badge>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
-              <span className="text-sm text-muted-foreground">Scadenze aperte</span>
-              <Badge variant="warning">{dashboard?.scadenze_aperte ?? 0}</Badge>
+              <span className="text-sm text-muted-foreground">Liquidazioni in bozza</span>
+              <Badge variant="warning">{dashboard?.liquidazioni_bozza ?? 0}</Badge>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
-              <span className="text-sm text-muted-foreground">Bozze da postare</span>
-              <Badge variant="secondary">{dashboard?.registrazioni_bozza ?? 0}</Badge>
+              <span className="text-sm text-muted-foreground">Ritenute da versare</span>
+              <Badge variant="secondary">{dashboard?.ritenute_da_versare ?? 0}</Badge>
             </div>
           </CardContent>
         </Card>

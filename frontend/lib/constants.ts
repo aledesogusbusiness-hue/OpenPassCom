@@ -4,6 +4,11 @@ export const REGIME_FISCALE_OPTIONS = [
   { value: 'forfettario', label: 'Forfettario' },
 ] as const
 
+export const PERIODICITA_IVA_OPTIONS = [
+  { value: 'mensile', label: 'Mensile' },
+  { value: 'trimestrale', label: 'Trimestrale' },
+] as const
+
 export const CAUSALE_OPTIONS = [
   { value: 'FV', label: 'FV — Fattura Vendita' },
   { value: 'FA', label: 'FA — Fattura Acquisto' },

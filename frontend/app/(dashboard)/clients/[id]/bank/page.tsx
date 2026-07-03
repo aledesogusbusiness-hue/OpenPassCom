@@ -30,6 +30,7 @@ import {
   useCreateBankStatement,
   useBankTransactions,
   useReconcileTransaction,
+  useMarkIrrilevante,
 } from '@/hooks/use-bank'
 import type { BankStatement, BankTransaction } from '@/types'
 import type { ReconcileInput } from '@/services/bank'
@@ -54,13 +55,17 @@ function TransactionRow({
   const [journalEntryId, setJournalEntryId] = useState('')
 
   const reconcile = useReconcileTransaction(clientId, statementId)
+  const markIrrilevante = useMarkIrrilevante(clientId, statementId)
 
   async function handleReconcile() {
-    const data: ReconcileInput = {
-      stato: reconcileStato,
-      ...(journalEntryId ? { journal_entry_id: journalEntryId } : {}),
+    if (reconcileStato === 'irrilevante') {
+      await markIrrilevante.mutateAsync(tx.id)
+    } else {
+      const data: ReconcileInput = {
+        ...(journalEntryId ? { journal_entry_id: journalEntryId } : {}),
+      }
+      await reconcile.mutateAsync({ transactionId: tx.id, data })
     }
-    await reconcile.mutateAsync({ transactionId: tx.id, data })
     setReconcileOpen(false)
     toast.success('Transazione riconciliata')
   }
@@ -124,8 +129,8 @@ function TransactionRow({
                     <Button variant="outline" onClick={() => setReconcileOpen(false)}>
                       Annulla
                     </Button>
-                    <Button onClick={handleReconcile} disabled={reconcile.isPending}>
-                      {reconcile.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                    <Button onClick={handleReconcile} disabled={reconcile.isPending || markIrrilevante.isPending}>
+                      {(reconcile.isPending || markIrrilevante.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
                       Conferma
                     </Button>
                   </div>

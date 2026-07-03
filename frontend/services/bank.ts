@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client'
-import type { BankStatement, BankTransaction } from '@/types'
+import type { BankStatement, BankTransaction, ReconciliationSummary } from '@/types'
 
 export interface CreateBankStatementInput {
   iban: string
@@ -7,12 +7,13 @@ export interface CreateBankStatementInput {
   data_fine: string
   saldo_iniziale: string
   saldo_finale: string
+  filename?: string
 }
 
 export interface ReconcileInput {
-  stato: 'riconciliata' | 'irrilevante'
   journal_entry_id?: string
   scheduled_payment_id?: string
+  note?: string
 }
 
 export const bankService = {
@@ -35,6 +36,12 @@ export const bankService = {
     )
   },
 
+  getSummary(clientId: string, statementId: string): Promise<ReconciliationSummary> {
+    return apiClient.get<ReconciliationSummary>(
+      `/api/v1/clients/${clientId}/bank-statements/${statementId}/summary`
+    )
+  },
+
   reconcile(
     clientId: string,
     statementId: string,
@@ -44,6 +51,17 @@ export const bankService = {
     return apiClient.post<BankTransaction>(
       `/api/v1/clients/${clientId}/bank-statements/${statementId}/transactions/${transactionId}/reconcile`,
       data
+    )
+  },
+
+  markIrrilevante(
+    clientId: string,
+    statementId: string,
+    transactionId: string
+  ): Promise<BankTransaction> {
+    return apiClient.post<BankTransaction>(
+      `/api/v1/clients/${clientId}/bank-statements/${statementId}/transactions/${transactionId}/mark-irrilevante`,
+      {}
     )
   },
 }

@@ -48,3 +48,16 @@ export function useReconcileTransaction(clientId: string, statementId: string) {
     },
   })
 }
+
+export function useMarkIrrilevante(clientId: string, statementId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (transactionId: string) =>
+      bankService.markIrrilevante(clientId, statementId, transactionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['bank-transactions', clientId, statementId],
+      })
+    },
+  })
+}
