@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { journalService } from '@/services/journal'
 import type { CreateJournalEntryInput } from '@/services/journal'
+import { triggerDownload } from '@/lib/utils'
 
 export function useJournalEntries(clientId: string, fiscalYearId: string) {
   return useQuery({
@@ -77,5 +78,14 @@ export function useBilancioVerifica(clientId: string, fiscalYearId: string) {
     queryKey: ['bilancio-verifica', clientId, fiscalYearId],
     queryFn: () => journalService.getBilancioVerifica(clientId, fiscalYearId),
     enabled: !!clientId && !!fiscalYearId,
+  })
+}
+
+export function useExportLibroGiornale(clientId: string, fiscalYearId: string) {
+  return useMutation({
+    mutationFn: async (format: 'pdf' | 'xlsx') => {
+      const { blob, filename } = await journalService.exportLibroGiornale(clientId, fiscalYearId, format)
+      triggerDownload(blob, filename)
+    },
   })
 }

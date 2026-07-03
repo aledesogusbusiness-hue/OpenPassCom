@@ -53,4 +53,14 @@ export const balanceService = {
       `/api/v1/clients/${clientId}/fixed-assets/${assetId}/plan`
     )
   },
+
+  exportBilancio(
+    clientId: string,
+    fiscalYearId: string,
+    format: 'pdf' | 'xlsx'
+  ): Promise<{ blob: Blob; filename: string }> {
+    return apiClient.getBlob(
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/export/bilancio?format=${format}`
+    )
+  },
 }

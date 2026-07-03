@@ -52,4 +52,14 @@ export const journalService = {
       `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/bilancio-verifica`
     )
   },
+
+  exportLibroGiornale(
+    clientId: string,
+    fiscalYearId: string,
+    format: 'pdf' | 'xlsx'
+  ): Promise<{ blob: Blob; filename: string }> {
+    return apiClient.getBlob(
+      `/api/v1/clients/${clientId}/fiscal-years/${fiscalYearId}/export/libro-giornale?format=${format}`
+    )
+  },
 }

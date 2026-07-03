@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   BookOpen,
   CheckCircle,
+  FileDown,
   Loader2,
   Plus,
   RotateCcw,
@@ -33,6 +34,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -45,6 +52,7 @@ import { useClient, useFiscalYears, useAccounts } from '@/hooks/use-clients'
 import {
   useBilancioVerifica,
   useCreateJournalEntry,
+  useExportLibroGiornale,
   useJournalEntries,
   usePostJournalEntry,
   useReverseJournalEntry,
@@ -117,6 +125,7 @@ export default function JournalPage() {
   const createEntry = useCreateJournalEntry(id, fiscalYearId)
   const postEntry = usePostJournalEntry(id, fiscalYearId)
   const reverseEntry = useReverseJournalEntry(id, fiscalYearId)
+  const exportGiornale = useExportLibroGiornale(id, fiscalYearId)
 
   function handleFyChange(value: string) {
     setSelectedFyId(value)
@@ -263,13 +272,35 @@ export default function JournalPage() {
         title="Prima Nota"
         description={client.ragione_sociale}
         actions={
-          <Button
-            onClick={() => setSheetOpen(true)}
-            disabled={!fiscalYearId}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Nuova Registrazione
-          </Button>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" disabled={!fiscalYearId || exportGiornale.isPending}>
+                  {exportGiornale.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileDown className="mr-2 h-4 w-4" />
+                  )}
+                  Esporta Libro Giornale
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => exportGiornale.mutate('pdf')}>
+                  Esporta PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportGiornale.mutate('xlsx')}>
+                  Esporta Excel
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              onClick={() => setSheetOpen(true)}
+              disabled={!fiscalYearId}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nuova Registrazione
+            </Button>
+          </div>
         }
       />
 

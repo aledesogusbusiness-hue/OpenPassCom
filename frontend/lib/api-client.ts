@@ -103,6 +103,30 @@ class ApiClient {
     return this.handleResponse<T>(res)
   }
 
+  async getBlob(path: string): Promise<{ blob: Blob; filename: string }> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('openpasscom_token') : null
+    const headers: Record<string, string> = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    const res = await fetch(`${this.baseUrl}${path}`, { method: 'GET', headers })
+    if (res.status === 401) {
+      removeToken()
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login'
+      }
+      throw new Error('Unauthorized')
+    }
+    if (!res.ok) {
+      throw new Error(`HTTP error ${res.status}`)
+    }
+    const disposition = res.headers.get('Content-Disposition') ?? ''
+    const match = disposition.match(/filename="?([^"]+)"?/)
+    const filename = match?.[1] ?? 'download'
+    const blob = await res.blob()
+    return { blob, filename }
+  }
+
   async postUrlEncoded<T>(path: string, params: Record<string, string>): Promise<T> {
     const token = typeof window !== 'undefined' ? localStorage.getItem('openpasscom_token') : null
     const headers: Record<string, string> = {

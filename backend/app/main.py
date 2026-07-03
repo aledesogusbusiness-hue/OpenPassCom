@@ -25,6 +25,7 @@ from app.routers import (
     studio as studio_router,
     bank as bank_router,
     conservatore as conservatore_router,
+    export as export_router,
 )
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,7 @@ app.include_router(fattura_pa_router.router)
 app.include_router(studio_router.router)
 app.include_router(bank_router.router)
 app.include_router(conservatore_router.router)
+app.include_router(export_router.router)
 
 
 @app.get("/health")

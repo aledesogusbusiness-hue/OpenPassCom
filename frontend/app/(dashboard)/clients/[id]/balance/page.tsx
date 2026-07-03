@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Plus, Calculator, Lock, Loader2, CheckCircle2 } from 'lucide-react'
+import { Plus, Calculator, Lock, Loader2, CheckCircle2, FileDown } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ColumnDef } from '@tanstack/react-table'
 import { PageHeader } from '@/components/shared/page-header'
@@ -25,6 +25,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useFiscalYears } from '@/hooks/use-clients'
 import {
@@ -34,6 +40,7 @@ import {
   useCreateFixedAsset,
   useComputePlan,
   useCloseYear,
+  useExportBilancio,
 } from '@/hooks/use-balance'
 import { FixedAssetForm } from '@/features/balance/components/fixed-asset-form'
 import type { FixedAssetFormValues } from '@/features/balance/components/fixed-asset-form'
@@ -101,6 +108,7 @@ export default function BalancePage() {
   const createAsset = useCreateFixedAsset(id)
   const computePlan = useComputePlan(id)
   const closeYear = useCloseYear(id, activeFyId)
+  const exportBilancio = useExportBilancio(id, activeFyId)
 
   const utile = parseFloat(ceQuery.data?.utile_perdita ?? '0')
   const isProfit = utile >= 0
@@ -205,6 +213,28 @@ export default function BalancePage() {
       <PageHeader
         title="Bilancio"
         description="Stato patrimoniale, conto economico e cespiti"
+        actions={
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={!activeFyId || exportBilancio.isPending}>
+                {exportBilancio.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <FileDown className="mr-2 h-4 w-4" />
+                )}
+                Esporta
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => exportBilancio.mutate('pdf')}>
+                Esporta PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportBilancio.mutate('xlsx')}>
+                Esporta Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
       />
 
       <div className="flex items-center gap-3">

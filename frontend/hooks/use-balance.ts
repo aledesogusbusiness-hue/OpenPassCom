@@ -1,8 +1,9 @@
 'use client'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { balanceService } from '@/services/balance'
 import type { CreateFixedAssetInput } from '@/services/balance'
+import { triggerDownload } from '@/lib/utils'
 
 export function useStatoPatrimoniale(clientId: string, fiscalYearId: string) {
   return useQuery({
@@ -55,6 +56,15 @@ export function useDepreciationPlan(clientId: string, assetId: string) {
     queryKey: ['depreciation-plan', clientId, assetId],
     queryFn: () => balanceService.getPlan(clientId, assetId),
     enabled: !!clientId && !!assetId,
+  })
+}
+
+export function useExportBilancio(clientId: string, fiscalYearId: string) {
+  return useMutation({
+    mutationFn: async (format: 'pdf' | 'xlsx') => {
+      const { blob, filename } = await balanceService.exportBilancio(clientId, fiscalYearId, format)
+      triggerDownload(blob, filename)
+    },
   })
 }
 

@@ -33,6 +33,17 @@ export function getStatoJournalBadge(stato: string): { label: string; variant: '
   return { label: 'Bozza', variant: 'secondary' }
 }
 
+export function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export function getPrioritaClass(priorita: string): string {
   if (priorita === 'urgente') return 'text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-400'
   if (priorita === 'alta') return 'text-orange-600 bg-orange-50 dark:bg-orange-950 dark:text-orange-400'
