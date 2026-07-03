@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -33,3 +33,27 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8)
     full_name: str = Field(min_length=1, max_length=255)
     role: Literal["admin", "accountant", "collaborator"] = "accountant"
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    role: Optional[Literal["admin", "accountant", "collaborator"]] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = Field(default=None, min_length=8)
+
+
+class ClientPermissionCreate(BaseModel):
+    user_id: uuid.UUID
+    permesso: Literal["lettura", "scrittura"] = "lettura"
+
+
+class ClientPermissionOut(BaseModel):
+    id: uuid.UUID
+    studio_id: uuid.UUID
+    user_id: uuid.UUID
+    client_entity_id: uuid.UUID
+    permesso: str
+    created_at: datetime
+    created_by: Optional[uuid.UUID]
+
+    model_config = {"from_attributes": True}

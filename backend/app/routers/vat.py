@@ -8,12 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, verify_client_access
 from app.models.auth import User
 from app.schemas.journal import VatEntryCreate, VatEntryOut, VatLiquidazioneOut
 from app.services import vat_service, parties_service
 
-router = APIRouter(prefix="/api/v1", tags=["Registro IVA"])
+router = APIRouter(prefix="/api/v1", tags=["Registro IVA"], dependencies=[Depends(verify_client_access)])
 
 
 async def _get_client_or_404(db: AsyncSession, client_id: uuid.UUID):

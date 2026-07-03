@@ -16,6 +16,7 @@ import {
   CheckSquare2,
   Building2,
   Settings,
+  ShieldCheck,
   ChevronDown,
   ChevronUp,
   LogOut,
@@ -33,7 +34,7 @@ type NavSection = {
   items: NavItem[]
 }
 
-const NAV_SECTIONS: NavSection[] = [
+const BASE_NAV_SECTIONS: NavSection[] = [
   {
     title: 'OVERVIEW',
     items: [
@@ -86,6 +87,8 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
 ]
+
+const ADMIN_NAV_ITEM: NavItem = { label: 'Utenti', icon: ShieldCheck, href: '/settings/users' }
 
 function SidebarSection({ section }: { section: NavSection }) {
   const pathname = usePathname()
@@ -142,6 +145,15 @@ function SidebarSection({ section }: { section: NavSection }) {
 export function Sidebar() {
   const { user, logout } = useAuth()
 
+  const navSections: NavSection[] =
+    user?.role === 'admin'
+      ? BASE_NAV_SECTIONS.map((section) =>
+          section.title === 'IMPOSTAZIONI'
+            ? { ...section, items: [...section.items, ADMIN_NAV_ITEM] }
+            : section,
+        )
+      : BASE_NAV_SECTIONS
+
   const initials = user
     ? user.full_name
         .split(' ')
@@ -170,7 +182,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-1">
-        {NAV_SECTIONS.map((section) => (
+        {navSections.map((section) => (
           <SidebarSection key={section.title} section={section} />
         ))}
       </nav>

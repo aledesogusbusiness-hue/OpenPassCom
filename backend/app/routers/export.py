@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, verify_client_access
 from app.models.auth import User
 from app.services import balance_sheet_service, export_service, parties_service
 
-router = APIRouter(prefix="/api/v1", tags=["Export"])
+router = APIRouter(prefix="/api/v1", tags=["Export"], dependencies=[Depends(verify_client_access)])
 
 _MEDIA_TYPES = {
     "pdf": "application/pdf",

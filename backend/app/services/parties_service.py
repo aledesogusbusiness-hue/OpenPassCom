@@ -64,6 +64,7 @@ async def update_client(
         setattr(client, field, value)
     client.updated_by = updated_by
     await db.flush()
+    await db.refresh(client)
     return client
 
 

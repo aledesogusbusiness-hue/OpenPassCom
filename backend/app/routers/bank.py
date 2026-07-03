@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, verify_client_access
 from app.models.auth import User
 from app.schemas.bank import (
     BankStatementCreate,
@@ -20,7 +20,7 @@ from app.schemas.bank import (
 )
 from app.services import bank_service, parties_service
 
-router = APIRouter(prefix="/api/v1", tags=["Banca"])
+router = APIRouter(prefix="/api/v1", tags=["Banca"], dependencies=[Depends(verify_client_access)])
 
 
 async def _get_client_or_404(db: AsyncSession, client_id: uuid.UUID):

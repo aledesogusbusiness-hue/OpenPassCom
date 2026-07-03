@@ -26,6 +26,8 @@ from app.routers import (
     bank as bank_router,
     conservatore as conservatore_router,
     export as export_router,
+    users as users_router,
+    permissions as permissions_router,
 )
 
 logger = logging.getLogger(__name__)
@@ -133,6 +135,8 @@ app.include_router(studio_router.router)
 app.include_router(bank_router.router)
 app.include_router(conservatore_router.router)
 app.include_router(export_router.router)
+app.include_router(users_router.router)
+app.include_router(permissions_router.router)
 
 
 @app.get("/health")

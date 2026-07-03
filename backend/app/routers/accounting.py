@@ -5,12 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, verify_client_access
 from app.models.auth import User
 from app.schemas.accounting import AccountCreate, AccountOut, AccountPlanOut, AccountTypeOut
 from app.services import accounting_service, parties_service
 
-router = APIRouter(prefix="/api/v1", tags=["Piano dei conti"])
+router = APIRouter(prefix="/api/v1", tags=["Piano dei conti"], dependencies=[Depends(verify_client_access)])
 
 
 @router.get("/clients/{client_id}/account-plan", response_model=AccountPlanOut)

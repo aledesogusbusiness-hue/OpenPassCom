@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.log import log_action
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, verify_client_access
 from app.models.auth import User
 from app.schemas.parties import (
     ClientEntityCreate,
@@ -15,9 +15,9 @@ from app.schemas.parties import (
     FiscalYearCreate,
     FiscalYearOut,
 )
-from app.services import parties_service
+from app.services import parties_service, user_service
 
-router = APIRouter(prefix="/api/v1", tags=["Aziende clienti"])
+router = APIRouter(prefix="/api/v1", tags=["Aziende clienti"], dependencies=[Depends(verify_client_access)])
 
 
 # ── Clienti ──────────────────────────────────────────────────────────────────
@@ -29,6 +29,9 @@ async def list_clients(
     current_user: User = Depends(get_current_user),
 ) -> List[ClientEntityOut]:
     clients = await parties_service.list_clients(db, include_inactive=include_inactive)
+    if current_user.role != "admin":
+        accessible = await user_service.list_accessible_client_ids(db, current_user.id)
+        clients = [c for c in clients if c.id in accessible]
     return [ClientEntityOut.model_validate(c) for c in clients]
 
 

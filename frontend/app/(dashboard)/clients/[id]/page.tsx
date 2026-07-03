@@ -49,8 +49,76 @@ import {
   useAccountTypes,
   useCreateAccount,
 } from '@/hooks/use-clients'
+import { useUsers, useClientPermissions, useGrantPermission, useRevokePermission } from '@/hooks/use-users'
+import { useAuth } from '@/providers/auth-provider'
 import type { FiscalYear, Account } from '@/types'
 import type { CreateClientInput } from '@/services/clients'
+
+const PERMESSO_LABELS: Record<string, string> = { lettura: 'Lettura', scrittura: 'Scrittura' }
+
+function ClientPermissionsPanel({ clientId }: { clientId: string }) {
+  const { data: users = [] } = useUsers()
+  const { data: permissions = [], isLoading } = useClientPermissions(clientId)
+  const grant = useGrantPermission(clientId)
+  const revoke = useRevokePermission(clientId)
+
+  const permByUserId = new Map(permissions.map((p) => [p.user_id, p]))
+  const nonAdminUsers = users.filter((u) => u.role !== 'admin')
+
+  async function handleChange(userId: string, value: string) {
+    try {
+      if (value === 'nessuno') {
+        await revoke.mutateAsync(userId)
+      } else {
+        await grant.mutateAsync({ userId, permesso: value as 'lettura' | 'scrittura' })
+      }
+      toast.success('Permessi aggiornati')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Errore durante l\'aggiornamento')
+    }
+  }
+
+  if (isLoading) {
+    return <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+  }
+
+  if (nonAdminUsers.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-8 text-center">
+        Nessun collaboratore non-admin nello studio. Gli admin hanno sempre accesso completo.
+      </p>
+    )
+  }
+
+  return (
+    <div className="rounded-md border divide-y">
+      {nonAdminUsers.map((u) => {
+        const perm = permByUserId.get(u.id)
+        return (
+          <div key={u.id} className="flex items-center justify-between p-4">
+            <div>
+              <p className="text-sm font-medium">{u.full_name}</p>
+              <p className="text-xs text-muted-foreground">{u.email}</p>
+            </div>
+            <Select
+              value={perm?.permesso ?? 'nessuno'}
+              onValueChange={(v) => handleChange(u.id, v)}
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="nessuno">Nessun accesso</SelectItem>
+                <SelectItem value="lettura">{PERMESSO_LABELS.lettura}</SelectItem>
+                <SelectItem value="scrittura">{PERMESSO_LABELS.scrittura}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 const accountSchema = z.object({
   codice: z.string().min(1, 'Codice obbligatorio').max(20),
@@ -165,6 +233,7 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
 
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const { user: currentUser } = useAuth()
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [fyDialogOpen, setFyDialogOpen] = useState(false)
@@ -351,6 +420,9 @@ export default function ClientDetailPage() {
           <TabsTrigger value="anagrafica">Anagrafica</TabsTrigger>
           <TabsTrigger value="esercizi">Esercizi Fiscali</TabsTrigger>
           <TabsTrigger value="piano">Piano dei Conti</TabsTrigger>
+          {currentUser?.role === 'admin' && (
+            <TabsTrigger value="permessi">Permessi</TabsTrigger>
+          )}
         </TabsList>
 
         {/* Anagrafica */}
@@ -422,6 +494,16 @@ export default function ClientDetailPage() {
             searchPlaceholder="Cerca per codice o nome..."
           />
         </TabsContent>
+
+        {/* Permessi (solo admin) */}
+        {currentUser?.role === 'admin' && (
+          <TabsContent value="permessi" className="mt-4 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Concedi ai collaboratori dello studio l&apos;accesso in lettura o scrittura a questo cliente.
+            </p>
+            <ClientPermissionsPanel clientId={id} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Edit dialog */}
